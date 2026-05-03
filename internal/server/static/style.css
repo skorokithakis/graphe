@@ -30,6 +30,9 @@ body {
   font-family: var(--body-font);
   color: #222;
   background: #fff;
+  /* Positioned so the absolutely-placed wordmark anchors to the body's
+     padding box rather than the viewport. */
+  position: relative;
 }
 
 /* Two-column grid: main text + margin notes.
@@ -183,15 +186,20 @@ mark.anchor.active {
   margin-bottom: 0;
 }
 
-/* Site wordmark above the post title. A <p> rather than a heading keeps it
-   out of the document outline; margin-bottom 0 closes the gap to the h1 so
-   the two read as a unit rather than separate blocks. */
+/* Site wordmark, pulled out of the centred content column to the top-left
+   of the page so it reads as a logo rather than another line of body text.
+   A <p> rather than a heading keeps it out of the document outline.
+   Absolute (not fixed) so it scrolls away with the rest of the header,
+   which avoids overlap with the article on narrow viewports. */
 .wordmark {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  margin: 0;
   font-family: var(--body-font);
   font-style: italic;
-  font-size: 1rem;
+  font-size: 1.4rem;
   color: #888;
-  margin: 0 0 0.1rem 0;
 }
 
 /* Typography. */
