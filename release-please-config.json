@@ -1,7 +1,8 @@
 {
   "packages": {
     ".": {
-      "release-type": "go"
+      "release-type": "go",
+      "release-as": "0.1.0"
     }
   },
   "include-component-in-tag": false,

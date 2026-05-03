@@ -145,9 +145,8 @@ mark.anchor.active {
 }
 
 /* The summary doubles as the comment-id label and the click target for
-   collapsing. We hide the browser's default disclosure marker and add a
-   subtle ▾/▸ indicator on the right so the affordance is discoverable
-   without dominating the visual. */
+   collapsing. We hide the browser's default disclosure marker; the
+   open/closed state is obvious from whether the body is visible. */
 .postit-id {
   font-size: 0.7rem;
   color: #888;
@@ -159,22 +158,64 @@ mark.anchor.active {
   justify-content: space-between;
   align-items: center;
   user-select: none;
+  gap: 0.25rem;
 }
 
 .postit-id::-webkit-details-marker {
   display: none;
 }
 
-.postit[open] > .postit-id::after {
-  content: "\25BE"; /* ▾ */
-  opacity: 0.5;
-  margin-left: 0.5rem;
+.postit-id-text {
+  flex: 1;
 }
 
-.postit:not([open]) > .postit-id::after {
-  content: "\25B8"; /* ▸ */
-  opacity: 0.5;
-  margin-left: 0.5rem;
+/* Orphaned post-its have a faded, slightly different background to signal
+   that their anchor text no longer exists in the document. */
+.postit.orphaned {
+  opacity: 0.75;
+  border-style: dashed;
+}
+
+/* Small inline badge shown in the header of orphaned post-its. Kept subtle
+   so it informs without dominating the note's content. */
+.orphan-badge {
+  font-size: 0.65rem;
+  color: #a06020;
+  background: #fde8c0;
+  border: 1px solid #e8c080;
+  border-radius: 2px;
+  padding: 0 0.3rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* Controls group (nav chevrons + close button) in the post-it header. Buttons
+   are styled as plain text glyphs to stay in line with the minimalist aesthetic. */
+.postit-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.postit-nav,
+.postit-close {
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  cursor: pointer;
+  font-size: 0.65rem;
+  color: #888;
+  line-height: 1;
+  font-family: var(--code-font);
+}
+
+.postit-nav:hover,
+.postit-close:hover {
+  color: #333;
+}
+
+.postit-close:hover {
+  color: #a02020;
 }
 
 .postit:not([open]) {

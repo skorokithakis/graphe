@@ -17,8 +17,16 @@
     </article>
     <aside class="margin-column">
       {{range .Comments}}
-      <details class="postit" data-comment-id="{{.ID}}" open>
-        <summary class="postit-id">{{.ID}}</summary>
+      <details class="postit{{if .Orphaned}} orphaned{{end}}" data-comment-id="{{.ID}}" open>
+        <summary class="postit-id">
+          {{if .Orphaned}}<span class="orphan-badge">orphaned</span>{{end}}
+          <span class="postit-id-text">{{.ID}}</span>
+          <span class="postit-controls">
+            <button class="postit-nav postit-nav-up" title="Previous comment" aria-label="Previous comment">▲</button>
+            <button class="postit-nav postit-nav-down" title="Next comment" aria-label="Next comment">▼</button>
+            <button class="postit-close" title="Delete comment" aria-label="Delete comment">✕</button>
+          </span>
+        </summary>
         <div class="postit-body">{{.Body}}</div>
       </details>
       {{end}}
