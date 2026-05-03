@@ -7,6 +7,85 @@
 (function () {
   "use strict";
 
+  var THEME_MODES = ["auto", "light", "dark"];
+  var THEME_STORAGE_KEY = "graphe-theme";
+  var THEME_GLYPH = { auto: "◐", light: "☀", dark: "☾" };
+
+  // Tracks the active matchMedia listener so it can be removed when leaving
+  // auto mode. null means no listener is currently attached.
+  var mediaQueryListener = null;
+
+  function applyTheme(mode) {
+    var resolved;
+    if (mode === "light" || mode === "dark") {
+      resolved = mode;
+    } else {
+      resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    }
+    document.documentElement.setAttribute("data-theme", resolved);
+  }
+
+  function readStoredMode() {
+    var stored = localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "light" || stored === "dark") return stored;
+    return "auto";
+  }
+
+  function syncToggleButton(mode) {
+    var button = document.querySelector(".theme-toggle");
+    if (!button) return;
+    button.textContent = THEME_GLYPH[mode];
+    button.setAttribute("aria-label", "Theme: " + mode);
+  }
+
+  // Adds the matchMedia listener when active is true, removes it when false.
+  // Guards against double-add (active=true when already set) and no-op remove.
+  function setAutoListener(active) {
+    var mq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (active && !mediaQueryListener) {
+      mediaQueryListener = function () { applyTheme("auto"); };
+      mq.addEventListener("change", mediaQueryListener);
+    } else if (!active && mediaQueryListener) {
+      mq.removeEventListener("change", mediaQueryListener);
+      mediaQueryListener = null;
+    }
+  }
+
+  // Sync the button glyph and aria-label immediately — the script is at the
+  // end of body so the button is already in the DOM. The FOUC script set
+  // data-theme-mode on <html> so we don't need to re-read localStorage here.
+  (function () {
+    var mode = document.documentElement.getAttribute("data-theme-mode") || "auto";
+    syncToggleButton(mode);
+    setAutoListener(mode === "auto");
+  }());
+
+  function wireThemeToggle() {
+    var button = document.querySelector(".theme-toggle");
+    if (!button) return;
+    button.addEventListener("click", function () {
+      var current = readStoredMode();
+      var nextMode = THEME_MODES[(THEME_MODES.indexOf(current) + 1) % THEME_MODES.length];
+
+      if (nextMode === "auto") {
+        // Removing the key rather than storing "auto" avoids a stale value if
+        // the user clears storage manually between visits.
+        localStorage.removeItem(THEME_STORAGE_KEY);
+      } else {
+        localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+      }
+      // Keep data-theme-mode in sync so re-renders (SSE reload) can read the
+      // current mode without touching localStorage again.
+      document.documentElement.setAttribute("data-theme-mode", nextMode);
+
+      applyTheme(nextMode);
+      syncToggleButton(nextMode);
+      setAutoListener(nextMode === "auto");
+    });
+  }
+
   var GAP_PX = 8; // minimum vertical gap between adjacent post-its
   var MOBILE_QUERY = "(max-width: 700px)";
   // Matches the CSS breakpoint where --margin-width grows. Crossing it
@@ -256,6 +335,13 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    // SSE-driven reloads replace the body, recreating the button. Re-sync its
+    // glyph and aria-label here; data-theme on <html> already survived intact.
+    var mode = readStoredMode();
+    applyTheme(mode);
+    syncToggleButton(mode);
+    setAutoListener(mode === "auto");
+    wireThemeToggle();
     arrangePostits();
     wireHover();
     wireToggleReposition();

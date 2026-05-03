@@ -11,6 +11,52 @@
   --code-font: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   --link-color: #7a2e1f;
   --link-color-hover: #5a1f12;
+  /* Colors promoted to variables so the dark theme can override them. */
+  --body-bg: #fff;
+  --body-color: #222;
+  --blockquote-border: #ccc;
+  --blockquote-color: #555;
+  --wordmark-color: #888;
+  --postit-id-color: #888;
+  --postit-nav-color: #888;
+  --postit-nav-hover-color: #333;
+  --postit-close-hover-color: #a02020;
+  --orphan-badge-color: #a06020;
+  --orphan-badge-bg: #fde8c0;
+  --orphan-badge-border: #e8c080;
+  --mobile-margin-border: #ddd;
+  --theme-toggle-color: #888;
+  --theme-toggle-hover-color: #555;
+}
+
+/* Warm-dark palette. The background is a near-black warm brown; text is a
+   cream that reduces eye strain compared to pure white. Anchors and post-its
+   use a dimmed amber so they remain visually distinct without being harsh.
+   Links use a lighter terracotta because the light-mode oxblood (#7a2e1f) is
+   far too dark to read on a dark background. */
+:root[data-theme="dark"] {
+  --anchor-bg: #4a3a15;
+  --anchor-bg-hover: #5c4a1a;
+  --postit-bg: #4a3a15;
+  --postit-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  --postit-border: 1px solid #7a6020;
+  --link-color: #d49080;
+  --link-color-hover: #e0a898;
+  --body-bg: #1f1813;
+  --body-color: #e8dcc8;
+  --blockquote-border: #5a4a30;
+  --blockquote-color: #b0a090;
+  --wordmark-color: #7a6a58;
+  --postit-id-color: #9a8a78;
+  --postit-nav-color: #9a8a78;
+  --postit-nav-hover-color: #c8b8a8;
+  --postit-close-hover-color: #d06060;
+  --orphan-badge-color: #c09060;
+  --orphan-badge-bg: #3a2a10;
+  --orphan-badge-border: #6a4a20;
+  --mobile-margin-border: #3a2e22;
+  --theme-toggle-color: #7a6a58;
+  --theme-toggle-hover-color: #b0a090;
 }
 
 *,
@@ -28,8 +74,8 @@ body {
   margin: 0;
   padding: 2rem 1rem;
   font-family: var(--body-font);
-  color: #222;
-  background: #fff;
+  color: var(--body-color);
+  background: var(--body-bg);
   /* Positioned so the absolutely-placed wordmark anchors to the body's
      padding box rather than the viewport. */
   position: relative;
@@ -92,7 +138,7 @@ header {
   }
   .margin-column:not(:empty) {
     margin-top: 2rem;
-    border-top: 1px solid #ddd;
+    border-top: 1px solid var(--mobile-margin-border);
     padding-top: 1rem;
   }
 }
@@ -149,7 +195,7 @@ mark.anchor.active {
    open/closed state is obvious from whether the body is visible. */
 .postit-id {
   font-size: 0.7rem;
-  color: #888;
+  color: var(--postit-id-color);
   font-family: var(--code-font);
   margin-bottom: 0.3rem;
   cursor: pointer;
@@ -180,9 +226,9 @@ mark.anchor.active {
    so it informs without dominating the note's content. */
 .orphan-badge {
   font-size: 0.65rem;
-  color: #a06020;
-  background: #fde8c0;
-  border: 1px solid #e8c080;
+  color: var(--orphan-badge-color);
+  background: var(--orphan-badge-bg);
+  border: 1px solid var(--orphan-badge-border);
   border-radius: 2px;
   padding: 0 0.3rem;
   line-height: 1.4;
@@ -204,18 +250,18 @@ mark.anchor.active {
   padding: 0 0.2rem;
   cursor: pointer;
   font-size: 0.65rem;
-  color: #888;
+  color: var(--postit-nav-color);
   line-height: 1;
   font-family: var(--code-font);
 }
 
 .postit-nav:hover,
 .postit-close:hover {
-  color: #333;
+  color: var(--postit-nav-hover-color);
 }
 
 .postit-close:hover {
-  color: #a02020;
+  color: var(--postit-close-hover-color);
 }
 
 .postit:not([open]) {
@@ -249,7 +295,31 @@ mark.anchor.active {
   font-family: var(--body-font);
   font-style: italic;
   font-size: 1.4rem;
-  color: #888;
+  color: var(--wordmark-color);
+}
+
+/* Theme toggle button, mirroring the wordmark's position at top-right.
+   Styled as a plain glyph in the same muted family as the wordmark and
+   post-it nav buttons — no border or background so it doesn't draw the eye
+   away from the content. Absolute (not fixed) so it scrolls with the page,
+   matching the wordmark's behaviour. */
+.theme-toggle {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  margin: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--theme-toggle-color);
+  line-height: 1;
+  font-family: var(--body-font);
+}
+
+.theme-toggle:hover {
+  color: var(--theme-toggle-hover-color);
 }
 
 /* Typography. */
@@ -270,12 +340,16 @@ p {
   margin: 1em 0;
 }
 
+/* Code blocks stay dark in both themes — code is more readable on dark
+   backgrounds and most editors render it that way, so it carries that
+   association. */
 pre {
   overflow-x: auto;
   font-size: 0.85rem;
   padding: 1rem;
   border-radius: 4px;
-  background: #f6f8fa;
+  background: #2a2018;
+  color: #e8dcc8;
 }
 
 code {
@@ -284,10 +358,10 @@ code {
 }
 
 blockquote {
-  border-left: 3px solid #ccc;
+  border-left: 3px solid var(--blockquote-border);
   margin-left: 0;
   padding-left: 1rem;
-  color: #555;
+  color: var(--blockquote-color);
 }
 
 /* Links in the article body and post-it notes use an oxblood colour that sits

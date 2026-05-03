@@ -128,8 +128,10 @@ func trimmedLine(line []byte) string {
 }
 
 // markdownRenderer is a shared goldmark instance configured with GFM extensions
-// and chroma-based syntax highlighting using the "github" style, which is
-// readable on a light background.
+// and chroma-based syntax highlighting using the "monokai" style. Code blocks
+// stay dark in both light and dark page themes — code is more readable on dark
+// backgrounds and most editors render it that way, so it carries that
+// association.
 //
 // WithUnsafe is required so that the server can insert raw <mark> HTML tags
 // into the markdown source before rendering (for comment anchor highlighting).
@@ -139,7 +141,7 @@ var markdownRenderer = goldmark.New(
 	goldmark.WithExtensions(
 		extension.GFM,
 		highlighting.NewHighlighting(
-			highlighting.WithStyle("github"),
+			highlighting.WithStyle("monokai"),
 			highlighting.WithFormatOptions(
 				chromahtml.WithClasses(false),
 			),

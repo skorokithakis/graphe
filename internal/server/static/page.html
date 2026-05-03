@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{.Title}}</title>
+  <!-- Runs before the stylesheet to avoid a flash of unstyled content when the
+       user has chosen a theme. Reads localStorage and sets data-theme on <html>
+       immediately. Also stores the logical mode in data-theme-mode so the main
+       script can sync the button glyph without re-reading localStorage.
+       The try/catch is justified here: a throw before the stylesheet would block
+       the entire page render. -->
+  <script>(function(){try{var t=localStorage.getItem("graphe-theme");var m=(t==="light"||t==="dark")?t:"auto";document.documentElement.setAttribute("data-theme-mode",m);if(m==="light"||m==="dark"){document.documentElement.setAttribute("data-theme",m);}else{if(window.matchMedia("(prefers-color-scheme: dark)").matches){document.documentElement.setAttribute("data-theme","dark");}}}catch(e){}}());</script>
   <style>{{.CSS}}</style>
 </head>
 <body>
@@ -32,6 +39,7 @@
       {{end}}
     </aside>
   </div>
+  <button class="theme-toggle" aria-label="Theme: auto">◐</button>
   <script>{{.JS}}</script>
 </body>
 </html>
