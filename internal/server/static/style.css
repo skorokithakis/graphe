@@ -265,8 +265,8 @@ mark.anchor.active {
    theme toggle. Hidden entirely when there are no comments to navigate. */
 .page-nav {
   position: fixed;
-  bottom: 1rem;
-  right: 1rem;
+  bottom: 1.5rem;
+  right: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -332,15 +332,15 @@ mark.anchor.active {
   color: var(--wordmark-color);
 }
 
-/* Theme toggle button, mirroring the wordmark's position at top-right.
-   Styled as a plain glyph in the same muted family as the wordmark and
-   post-it nav buttons — no border or background so it doesn't draw the eye
-   away from the content. Absolute (not fixed) so it scrolls with the page,
-   matching the wordmark's behaviour. */
+/* Theme toggle button at the top-right of the viewport. Styled as a plain
+   glyph in the same muted family as the wordmark — no border or background so
+   it doesn't draw the eye away from the content. Fixed (not absolute) so it
+   stays reachable while reading; the wordmark stays absolute because it's a
+   logo, not a control. */
 .theme-toggle {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
   margin: 0;
   background: none;
   border: none;
