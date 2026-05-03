@@ -30,11 +30,12 @@
   --theme-toggle-hover-color: #555;
 }
 
-/* Warm-dark palette. The background is a near-black warm brown; text is a
-   cream that reduces eye strain compared to pure white. Anchors and post-its
-   use a dimmed amber so they remain visually distinct without being harsh.
-   Links use a lighter terracotta because the light-mode oxblood (#7a2e1f) is
-   far too dark to read on a dark background. */
+/* Neutral-dark palette. Page chrome (background, text, dividers, nav) is a
+   near-neutral charcoal so the page itself reads as quiet and uncoloured.
+   Warmth is reserved for content accents — anchors, post-its, links, and
+   orphan badges — so the Tufte-style highlight cues remain distinct without
+   tinting the whole surface. Links use a lighter terracotta because the
+   light-mode oxblood (#7a2e1f) is far too dark to read on a dark background. */
 :root[data-theme="dark"] {
   --anchor-bg: #4a3a15;
   --anchor-bg-hover: #5c4a1a;
@@ -43,22 +44,22 @@
   --postit-border: 1px solid #7a6020;
   --link-color: #d49080;
   --link-color-hover: #e0a898;
-  --body-bg: #1f1813;
-  --body-color: #e8dcc8;
-  --blockquote-border: #5a4a30;
-  --blockquote-color: #b0a090;
-  --wordmark-color: #7a6a58;
-  --postit-id-color: #9a8a78;
+  --body-bg: #1a1a1c;
+  --body-color: #e6e4df;
+  --blockquote-border: #3a3a3c;
+  --blockquote-color: #a8a6a2;
+  --wordmark-color: #6a6a6c;
+  --postit-id-color: #8a8a8c;
   --postit-close-hover-color: #d06060;
-  --page-nav-color: #9a8a78;
-  --page-nav-hover-color: #c8b8a8;
-  --page-nav-disabled-color: #4a3a28;
+  --page-nav-color: #8a8a8c;
+  --page-nav-hover-color: #c8c6c2;
+  --page-nav-disabled-color: #3a3a3c;
   --orphan-badge-color: #c09060;
   --orphan-badge-bg: #3a2a10;
   --orphan-badge-border: #6a4a20;
-  --mobile-margin-border: #3a2e22;
-  --theme-toggle-color: #7a6a58;
-  --theme-toggle-hover-color: #b0a090;
+  --mobile-margin-border: #2c2c2e;
+  --theme-toggle-color: #6a6a6c;
+  --theme-toggle-hover-color: #a8a6a2;
 }
 
 *,
