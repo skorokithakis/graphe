@@ -118,6 +118,39 @@ func TestServer_AnchorMarkPresent(t *testing.T) {
 	}
 }
 
+// TestServer_DocIDRenderedInPage verifies that the rendered page contains a
+// data-graphe-doc-id attribute on the <html> element. The client reads this to
+// scope localStorage keys per document; if it is missing, collapsed state bleeds
+// across documents.
+func TestServer_DocIDRenderedInPage(t *testing.T) {
+	mdPath := writeFixtures(t)
+
+	srv, err := server.New(mdPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	body := recorder.Body.String()
+
+	// The attribute must be present and non-empty. We do not assert the exact
+	// hash value because it depends on the temp directory path, but we verify
+	// the attribute is a 16-character hex string.
+	docID, err := review.DocID(mdPath)
+	if err != nil {
+		t.Fatalf("DocID: %v", err)
+	}
+	if len(docID) != 16 {
+		t.Fatalf("DocID returned %q (len %d), want 16 hex chars", docID, len(docID))
+	}
+	want := `data-graphe-doc-id="` + docID + `"`
+	if !strings.Contains(body, want) {
+		t.Errorf("rendered HTML does not contain %q; got:\n%s", want, body)
+	}
+}
+
 func TestServer_ReloadUpdatesContent(t *testing.T) {
 	mdPath := writeFixtures(t)
 

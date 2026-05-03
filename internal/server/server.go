@@ -53,6 +53,7 @@ type renderedComment struct {
 // renderedPage is the data passed to pageTemplate.
 type renderedPage struct {
 	Title    string
+	DocID    string
 	HTML     template.HTML
 	CSS      template.CSS
 	JS       template.JS
@@ -171,8 +172,14 @@ func (s *Server) Reload() error {
 	s.prevSource = currSource
 	s.hasPreviousSource = true
 
+	docID, err := review.DocID(s.mdPath)
+	if err != nil {
+		return fmt.Errorf("deriving doc id: %w", err)
+	}
+
 	page := renderedPage{
 		Title:    loadedPost.Title,
+		DocID:    docID,
 		HTML:     annotatedHTML,
 		CSS:      template.CSS(cssContent),
 		JS:       template.JS(jsContent),

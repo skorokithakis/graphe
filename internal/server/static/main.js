@@ -7,6 +7,29 @@
 (function () {
   "use strict";
 
+  // Apply collapsed state from localStorage before any layout pass so that
+  // post-its measure at their collapsed height on the first arrange. The doc id
+  // scopes the key per document so random c-xxxx IDs from different files do
+  // not bleed into each other. The try/catch matches the FOUC theme script
+  // style: a storage exception must not break the page.
+  (function () {
+    try {
+      var docID = document.documentElement.getAttribute("data-graphe-doc-id");
+      if (!docID) return;
+      var stored = localStorage.getItem("graphe-collapsed-postits:" + docID);
+      if (!stored) return;
+      var collapsed = JSON.parse(stored);
+      if (!Array.isArray(collapsed)) return;
+      var collapsedSet = {};
+      collapsed.forEach(function (id) { collapsedSet[id] = true; });
+      document.querySelectorAll("details.postit[data-comment-id]").forEach(function (postit) {
+        if (collapsedSet[postit.dataset.commentId]) {
+          postit.removeAttribute("open");
+        }
+      });
+    } catch (e) {}
+  }());
+
   var THEME_MODES = ["auto", "light", "dark"];
   var THEME_STORAGE_KEY = "graphe-theme";
   var THEME_GLYPH = { auto: "◐", light: "☀", dark: "☾" };
@@ -250,6 +273,37 @@
     });
   }
 
+  // Persist the collapsed state of each post-it to localStorage so it survives
+  // browser reloads and SSE-driven reloads. The try/catch matches the FOUC
+  // theme script style: a storage exception must not break the page.
+  function wireToggleCollapse() {
+    var docID = document.documentElement.getAttribute("data-graphe-doc-id");
+    if (!docID) return;
+    var storageKey = "graphe-collapsed-postits:" + docID;
+
+    document.querySelectorAll(".postit").forEach(function (postit) {
+      postit.addEventListener("toggle", function () {
+        try {
+          var stored = localStorage.getItem(storageKey);
+          var collapsed = (stored && JSON.parse(stored));
+          if (!Array.isArray(collapsed)) collapsed = [];
+          var id = postit.dataset.commentId;
+          var isOpen = postit.open;
+          if (isOpen) {
+            collapsed = collapsed.filter(function (item) { return item !== id; });
+          } else {
+            if (collapsed.indexOf(id) === -1) collapsed.push(id);
+          }
+          if (collapsed.length === 0) {
+            localStorage.removeItem(storageKey);
+          } else {
+            localStorage.setItem(storageKey, JSON.stringify(collapsed));
+          }
+        } catch (e) {}
+      });
+    });
+  }
+
   // Wire up the close (delete) button on each post-it. On click, sends DELETE
   // /comments/<id>. On success the SSE reload event will refresh the page.
   // On failure, logs to console without blocking the UI.
@@ -377,6 +431,7 @@
     arrangePostits();
     wireHover();
     wireToggleReposition();
+    wireToggleCollapse();
     wireCloseButtons();
     wirePageNav();
     connectSSE();

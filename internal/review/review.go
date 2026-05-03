@@ -319,6 +319,30 @@ func (s *Store) findIndex(id string) int {
 	return -1
 }
 
+// DocID returns the 16-hex document identifier for the given markdown file.
+// This is the same hash prefix used to name the sidecar file, exposed here so
+// the server can embed it in the page for the client to scope localStorage keys
+// per document without a round-trip.
+//
+// Callers must ensure the markdown file exists on disk before calling DocID,
+// because filepath.EvalSymlinks requires the path to be present.
+func DocID(mdPath string) (string, error) {
+	absPath, err := filepath.Abs(mdPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving absolute path of %s: %w", mdPath, err)
+	}
+
+	// Resolve symlinks so that two paths pointing at the same inode share one
+	// document ID. EvalSymlinks requires the file to exist.
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving symlinks for %s: %w", absPath, err)
+	}
+
+	sum := sha256.Sum256([]byte(resolvedPath))
+	return hex.EncodeToString(sum[:])[:16], nil
+}
+
 // SidecarPath returns the path to the sidecar file for the given markdown file.
 // The sidecar lives in <UserCacheDir>/graphe/<hash>.graphe, where <hash> is the
 // first 16 hex characters of the SHA-256 of the symlink-resolved absolute path
@@ -329,27 +353,17 @@ func (s *Store) findIndex(id string) int {
 // Callers must ensure the markdown file exists on disk before calling
 // SidecarPath, because filepath.EvalSymlinks requires the path to be present.
 func SidecarPath(mdPath string) (string, error) {
-	absPath, err := filepath.Abs(mdPath)
+	docID, err := DocID(mdPath)
 	if err != nil {
-		return "", fmt.Errorf("resolving absolute path of %s: %w", mdPath, err)
+		return "", err
 	}
-
-	// Resolve symlinks so that two paths pointing at the same inode share one
-	// sidecar. EvalSymlinks requires the file to exist.
-	resolvedPath, err := filepath.EvalSymlinks(absPath)
-	if err != nil {
-		return "", fmt.Errorf("resolving symlinks for %s: %w", absPath, err)
-	}
-
-	sum := sha256.Sum256([]byte(resolvedPath))
-	hash := hex.EncodeToString(sum[:])[:16]
 
 	cacheBase, err := userCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("locating user cache directory: %w", err)
 	}
 
-	return filepath.Join(cacheBase, "graphe", hash+".graphe"), nil
+	return filepath.Join(cacheBase, "graphe", docID+".graphe"), nil
 }
 
 // EnsureCacheDir creates the graphe cache directory if it does not already
