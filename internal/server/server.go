@@ -121,6 +121,14 @@ func (s *Server) Reload() error {
 	return nil
 }
 
+// CloseSubscribers closes all live SSE subscriber channels so the /events
+// handlers return promptly. Wire this into http.Server.RegisterOnShutdown:
+// Shutdown does not cancel in-flight request contexts, so without this the
+// long-lived SSE connections keep Shutdown blocked until its timeout expires.
+func (s *Server) CloseSubscribers() {
+	s.broadcaster.closeAll()
+}
+
 // SubscribeForTest returns a channel that receives SSE event names. It is
 // intended only for use in tests; production code should use the SSE endpoint.
 func (s *Server) SubscribeForTest() chan string {

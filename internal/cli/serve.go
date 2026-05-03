@@ -94,6 +94,12 @@ Press Ctrl-C to stop the server cleanly.`,
 		}()
 
 		httpServer := &http.Server{Handler: grapheServer.Handler()}
+		// SSE handlers block on a channel receive that http.Server.Shutdown
+		// does not interrupt (it leaves request contexts alone for in-flight
+		// handlers). Closing all subscriber channels at shutdown lets those
+		// handlers return immediately so Shutdown completes promptly instead
+		// of waiting for shutdownTimeout.
+		httpServer.RegisterOnShutdown(grapheServer.CloseSubscribers)
 
 		// Serve in a goroutine so we can wait for the signal below.
 		serveError := make(chan error, 1)
