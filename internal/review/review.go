@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package review handles the comment store for a single markdown post.
-// Each post's comments are persisted in a sidecar JSON file alongside the
-// markdown file (e.g. post.md -> post-review.json).
+// Each post's comments are persisted in a sidecar file alongside the
+// markdown file (e.g. post.md -> post.graphe).
 package review
 
 import (
@@ -174,6 +174,34 @@ func (s *Store) Delete(id string) error {
 	return nil
 }
 
+// Clear removes all comments by deleting the sidecar file from disk and
+// zeroing the in-memory slice. It returns the number of comments that were
+// present before clearing. If the sidecar does not exist, it returns 0 with
+// no error (idempotent).
+//
+// The sidecar is deleted rather than overwritten with an empty document
+// because the file currently holds nothing but the comments array. If a
+// future change adds other top-level fields, this method should be reworked
+// to empty the array in place and preserve the rest (see gnosis mkrpzw).
+func (s *Store) Clear() (int, error) {
+	count := len(s.comments)
+
+	if err := os.Remove(s.sidecarPath); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return 0, fmt.Errorf("removing sidecar: %w", err)
+		}
+		// The sidecar was already gone (external delete or race between Load and
+		// Clear). The store is logically empty either way, so report 0 rather than
+		// the stale in-memory count to avoid misleading output like "cleared 5
+		// comments" for what was effectively a no-op on disk.
+		s.comments = nil
+		return 0, nil
+	}
+
+	s.comments = nil
+	return count, nil
+}
+
 // List returns a copy of all comments in the store.
 func (s *Store) List() []Comment {
 	result := make([]Comment, len(s.comments))
@@ -273,11 +301,11 @@ func (s *Store) findIndex(id string) int {
 	return -1
 }
 
-// sidecarPathFor derives the sidecar JSON path from a markdown file path.
-// "/path/to/post.md" -> "/path/to/post-review.json".
+// sidecarPathFor derives the sidecar path from a markdown file path.
+// "/path/to/post.md" -> "/path/to/post.graphe".
 func sidecarPathFor(mdPath string) string {
 	// filepath.Ext only considers dots within the final path element, which
 	// avoids incorrectly stripping at a dot in a parent directory name.
 	ext := filepath.Ext(mdPath)
-	return strings.TrimSuffix(mdPath, ext) + "-review.json"
+	return strings.TrimSuffix(mdPath, ext) + ".graphe"
 }

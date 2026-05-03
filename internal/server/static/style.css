@@ -9,6 +9,8 @@
   --gap: 2rem;
   --body-font: Georgia, "Times New Roman", serif;
   --code-font: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  --link-color: #7a2e1f;
+  --link-color-hover: #5a1f12;
 }
 
 *,
@@ -181,6 +183,17 @@ mark.anchor.active {
   margin-bottom: 0;
 }
 
+/* Site wordmark above the post title. A <p> rather than a heading keeps it
+   out of the document outline; margin-bottom 0 closes the gap to the h1 so
+   the two read as a unit rather than separate blocks. */
+.wordmark {
+  font-family: var(--body-font);
+  font-style: italic;
+  font-size: 1rem;
+  color: #888;
+  margin: 0 0 0.1rem 0;
+}
+
 /* Typography. */
 h1,
 h2,
@@ -217,4 +230,23 @@ blockquote {
   margin-left: 0;
   padding-left: 1rem;
   color: #555;
+}
+
+/* Links in the article body and post-it notes use an oxblood colour that sits
+   in the same warm family as the yellow anchor/post-it palette, avoiding the
+   jarring browser-default blue. :visited is intentionally identical to :link
+   because in a draft-review context every link is functionally equivalent. */
+.post-body a:link,
+.post-body a:visited,
+.postit-body a:link,
+.postit-body a:visited {
+  color: var(--link-color);
+  text-decoration: underline;
+}
+
+.post-body a:hover,
+.post-body a:focus,
+.postit-body a:hover,
+.postit-body a:focus {
+  color: var(--link-color-hover);
 }

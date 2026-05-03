@@ -16,7 +16,7 @@ import (
 // we coalesce them into a single reload rather than hammering the disk.
 const debounceDelay = 150 * time.Millisecond
 
-// Watch starts a goroutine that watches the markdown file and its -review.json
+// Watch starts a goroutine that watches the markdown file and its .graphe
 // sidecar for changes. When a relevant file changes, it debounces the events,
 // calls Reload, and broadcasts a "reload" SSE event to all connected clients.
 //
@@ -33,7 +33,7 @@ func (s *Server) Watch(ctx context.Context) error {
 	// use atomic saves (write to a temp file then rename) would cause a
 	// directly-watched file to lose its watch after the rename. Watching the
 	// directory catches Create/Rename events for both the .md and the
-	// -review.json sidecar regardless of whether the sidecar exists at startup.
+	// .graphe sidecar regardless of whether the sidecar exists at startup.
 	directory := filepath.Dir(s.mdPath)
 	if err := watcher.Add(directory); err != nil {
 		return err
@@ -94,11 +94,11 @@ func (s *Server) Watch(ctx context.Context) error {
 	}
 }
 
-// sidecarBasename returns the basename of the -review.json sidecar for the
-// given markdown path. For example, "post.md" → "post-review.json".
+// sidecarBasename returns the basename of the .graphe sidecar for the
+// given markdown path. For example, "post.md" → "post.graphe".
 func sidecarBasename(mdPath string) string {
 	base := filepath.Base(mdPath)
 	ext := filepath.Ext(base)
 	stem := base[:len(base)-len(ext)]
-	return stem + "-review.json"
+	return stem + ".graphe"
 }

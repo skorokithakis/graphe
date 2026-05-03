@@ -18,6 +18,7 @@ func init() {
 	commentCommand.AddCommand(commentEditCommand)
 	commentCommand.AddCommand(commentDeleteCommand)
 	commentCommand.AddCommand(commentListCommand)
+	commentCommand.AddCommand(commentClearCommand)
 
 	commentAddCommand.Flags().String("start", "", "Unique substring marking the start of the anchor (required)")
 	commentAddCommand.Flags().String("end", "", "Unique substring marking the end of the anchor (required)")
@@ -35,10 +36,10 @@ var commentCommand = &cobra.Command{
 	Use:   "comment",
 	Short: "Manage review comments on a markdown post.",
 	Long: `comment groups subcommands for adding, editing, deleting, and listing
-review comments stored in the sidecar JSON file alongside a markdown post.
+review comments stored in the sidecar file alongside a markdown post.
 
 Each comment is anchored to a unique substring range in the post source.
-The sidecar file is named <stem>-review.json and lives next to the .md file.`,
+The sidecar file is named <stem>.graphe and lives next to the .md file.`,
 }
 
 var commentAddCommand = &cobra.Command{
@@ -50,8 +51,8 @@ either is ambiguous or missing, the command exits non-zero with an error.
 
 On success, the new comment ID (e.g. "c-a1b2") is printed to stdout.
 
-The comment is stored in a sidecar JSON file next to the markdown file:
-  post.md -> post-review.json`,
+The comment is stored in a sidecar file next to the markdown file:
+  post.md -> post.graphe`,
 	Example: `  graphe comment add post.md \
     --start "The quick brown fox" \
     --end "lazy dog" \
@@ -134,7 +135,7 @@ current post source. Changing only --body skips anchor revalidation.`,
 var commentDeleteCommand = &cobra.Command{
 	Use:   "delete <file.md> <id>",
 	Short: "Delete a review comment by ID.",
-	Long: `delete removes the comment with the given ID from the sidecar JSON file.
+	Long: `delete removes the comment with the given ID from the sidecar file.
 The command exits non-zero if the ID does not exist.`,
 	Example: `  graphe comment delete post.md c-a1b2`,
 	Args:    cobra.ExactArgs(2),
@@ -147,14 +148,49 @@ The command exits non-zero if the ID does not exist.`,
 			return fmt.Errorf("loading review store: %w", err)
 		}
 
-		return store.Delete(commentID)
+		if err := store.Delete(commentID); err != nil {
+			return err
+		}
+
+		fmt.Printf("deleted %s\n", commentID)
+		return nil
+	},
+}
+
+var commentClearCommand = &cobra.Command{
+	Use:   "clear <file.md>",
+	Short: "Remove all review comments by deleting the sidecar file.",
+	Long: `clear deletes the sidecar file (<stem>.graphe) for the given markdown post,
+removing all comments at once. If no sidecar exists, the command exits
+successfully without printing an error.`,
+	Example: `  graphe comment clear post.md`,
+	Args:    cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+
+		store, err := review.Load(filePath)
+		if err != nil {
+			return fmt.Errorf("loading review store: %w", err)
+		}
+
+		count, err := store.Clear()
+		if err != nil {
+			return err
+		}
+
+		if count == 0 {
+			fmt.Println("no comments to clear")
+		} else {
+			fmt.Printf("cleared %d comments\n", count)
+		}
+		return nil
 	},
 }
 
 var commentListCommand = &cobra.Command{
 	Use:   "list <file.md>",
 	Short: "List all review comments for a post.",
-	Long: `list prints every comment in the sidecar JSON file, one block per comment.
+	Long: `list prints every comment in the sidecar file, one block per comment.
 
 Output format:
 

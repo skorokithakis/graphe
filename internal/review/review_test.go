@@ -3,6 +3,7 @@
 package review_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -209,6 +210,98 @@ func TestAdd_OverlappingAnchorCountedCorrectly(t *testing.T) {
 	}
 }
 
+func TestClear_RemovesAllCommentsAndDeletesSidecar(t *testing.T) {
+	dir := t.TempDir()
+	mdPath := filepath.Join(dir, "post.md")
+
+	store, err := review.Load(mdPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if _, err := store.Add("quick brown fox", "lazy dog", "body one", source); err != nil {
+		t.Fatalf("Add first: %v", err)
+	}
+	if _, err := store.Add("jumps over", "clever.", "body two", source); err != nil {
+		t.Fatalf("Add second: %v", err)
+	}
+
+	count, err := store.Clear()
+	if err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("Clear returned count %d, want 2", count)
+	}
+
+	// In-memory slice must be empty.
+	if comments := store.List(); len(comments) != 0 {
+		t.Errorf("expected 0 comments after Clear, got %d", len(comments))
+	}
+
+	// Sidecar file must be gone from disk.
+	sidecarPath := filepath.Join(dir, "post.graphe")
+	if _, err := os.Stat(sidecarPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("sidecar file still exists after Clear: %v", err)
+	}
+}
+
+func TestClear_IdempotentWhenNoSidecar(t *testing.T) {
+	store := loadEmpty(t)
+
+	// First clear on a store with no sidecar must succeed and return 0.
+	count, err := store.Clear()
+	if err != nil {
+		t.Fatalf("Clear on empty store: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Clear returned count %d, want 0", count)
+	}
+
+	// Second clear must also succeed (idempotent).
+	count, err = store.Clear()
+	if err != nil {
+		t.Fatalf("second Clear: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("second Clear returned count %d, want 0", count)
+	}
+}
+
+func TestClear_SidecarDeletedExternallyReturnsZero(t *testing.T) {
+	dir := t.TempDir()
+	mdPath := filepath.Join(dir, "post.md")
+
+	store, err := review.Load(mdPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	if _, err := store.Add("quick brown fox", "lazy dog", "body", source); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	// Simulate an external delete (or a race between Load and Clear) by removing
+	// the sidecar before Clear is called.
+	sidecarPath := filepath.Join(dir, "post.graphe")
+	if err := os.Remove(sidecarPath); err != nil {
+		t.Fatalf("os.Remove sidecar: %v", err)
+	}
+
+	count, err := store.Clear()
+	if err != nil {
+		t.Fatalf("Clear after external delete: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Clear returned count %d, want 0 when sidecar was already gone", count)
+	}
+
+	// In-memory slice must still be cleared.
+	if comments := store.List(); len(comments) != 0 {
+		t.Errorf("expected 0 comments after Clear, got %d", len(comments))
+	}
+}
+
 func TestSidecarPath_DerivedCorrectly(t *testing.T) {
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "my-post.md")
@@ -222,7 +315,7 @@ func TestSidecarPath_DerivedCorrectly(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	expectedSidecar := filepath.Join(dir, "my-post-review.json")
+	expectedSidecar := filepath.Join(dir, "my-post.graphe")
 	if _, err := os.Stat(expectedSidecar); err != nil {
 		t.Errorf("sidecar file not found at expected path %s: %v", expectedSidecar, err)
 	}

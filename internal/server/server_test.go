@@ -49,7 +49,7 @@ func writeFixtures(t *testing.T) string {
 		t.Fatalf("writing markdown fixture: %v", err)
 	}
 
-	sidecarPath := filepath.Join(dir, "post-review.json")
+	sidecarPath := filepath.Join(dir, "post.graphe")
 	sidecarData, err := json.MarshalIndent(fixtureSidecar, "", "  ")
 	if err != nil {
 		t.Fatalf("marshalling sidecar fixture: %v", err)

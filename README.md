@@ -52,6 +52,10 @@ graphe comment delete post.md c-a1b2
   ```sh
   graphe comment edit post.md c-a1b2 --body "Revised suggestion."
   ```
+- **Clear** all comments at once (deletes the sidecar file):
+  ```sh
+  graphe comment clear post.md
+  ```
 
 ## Use with an LLM
 

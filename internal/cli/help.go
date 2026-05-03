@@ -66,9 +66,9 @@ where a human author asks an LLM to review a draft: the human runs the server,
 the LLM adds structured comments via the CLI, and the human reads the rendered
 page to decide which feedback to act on.
 
-Comments are stored in a sidecar JSON file (<stem>-review.json) that lives
-next to the markdown file. The browser page reloads automatically whenever
-either file changes.
+Comments are stored in a sidecar file (<stem>.graphe) that lives next to
+the markdown file. The browser page reloads automatically whenever either
+file changes.
 
 
 WHEN TO USE IT
@@ -182,8 +182,16 @@ COMMAND REFERENCE
 
   graphe comment delete <file.md> <id>
     Remove a comment. The human typically does this after acting on feedback.
+    Prints "deleted <id>" on success.
     Example:
       graphe comment delete post.md c-a1b2
+
+  graphe comment clear <file.md>
+    Remove all comments at once by deleting the sidecar file. Idempotent: if
+    there are no comments, exits successfully and prints "no comments to clear".
+    Prints "cleared N comments" when comments were removed.
+    Example:
+      graphe comment clear post.md
 
 
 TIPS FOR LLMs
@@ -204,6 +212,6 @@ TIPS FOR LLMs
 - After adding all comments, run 'graphe comment list post.md' to confirm
   every comment was stored correctly before reporting back to the human.
 
-- Do not edit the -review.json file directly. Always use the CLI so that
+- Do not edit the .graphe file directly. Always use the CLI so that
   anchor validation runs.
 `
