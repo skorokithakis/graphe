@@ -105,6 +105,13 @@ type Server struct {
 // New creates a Server for the markdown file at mdPath and performs the initial
 // load. Returns an error if the file cannot be read or rendered.
 func New(mdPath string) (*Server, error) {
+	// Ensure the cache directory exists before Watch calls watcher.Add on it.
+	// Doing this here rather than inside Watch keeps the error surface at
+	// startup rather than mid-run.
+	if err := review.EnsureCacheDir(); err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		mdPath:      mdPath,
 		broadcaster: newBroadcaster(),
@@ -427,27 +434,27 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment, knownO
 				endIndex = sourceLen
 			}
 
-		// Determine whether the anchor text still matches at the translated
-		// position. Both start and end must match for the comment to be
-		// considered anchored.
-		anchored := sourceMatchesAt(source, startIndex, comment.Start) &&
-			sourceMatchesAt(source, endIndex, comment.End)
+			// Determine whether the anchor text still matches at the translated
+			// position. Both start and end must match for the comment to be
+			// considered anchored.
+			anchored := sourceMatchesAt(source, startIndex, comment.Start) &&
+				sourceMatchesAt(source, endIndex, comment.End)
 
-		// If the translated position now falls inside a fenced code block,
-		// goldmark would escape the inserted <mark> tag and show raw HTML to
-		// the user. Downgrade to an orphan so the pin is inserted as a plain
-		// <span> instead, which goldmark also escapes but is harmless.
-		if anchored && fencedLineOffsets[lineStartOffset(source, startIndex)] {
-			anchored = false
-		}
+			// If the translated position now falls inside a fenced code block,
+			// goldmark would escape the inserted <mark> tag and show raw HTML to
+			// the user. Downgrade to an orphan so the pin is inserted as a plain
+			// <span> instead, which goldmark also escapes but is harmless.
+			if anchored && fencedLineOffsets[lineStartOffset(source, startIndex)] {
+				anchored = false
+			}
 
-		spans = append(spans, anchorSpan{
-			comment:    comment,
-			startIndex: startIndex,
-			endIndex:   endIndex,
-			orphaned:   !anchored,
-		})
-		continue
+			spans = append(spans, anchorSpan{
+				comment:    comment,
+				startIndex: startIndex,
+				endIndex:   endIndex,
+				orphaned:   !anchored,
+			})
+			continue
 		}
 
 		// Bootstrap: strict anchor lookup (original behaviour).

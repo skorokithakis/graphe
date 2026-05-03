@@ -54,4 +54,3 @@ command's usage (same as 'graphe <command> --help').`,
 		target.HelpFunc()(target, remainingArgs)
 	},
 }
-

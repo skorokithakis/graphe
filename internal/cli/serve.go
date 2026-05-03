@@ -43,8 +43,9 @@ over HTTP. By default it binds to 127.0.0.1:7290; override with --host and
 --port. The page reloads automatically in the browser whenever the markdown
 file or its review sidecar changes on disk.
 
-If a <stem>.graphe sidecar exists next to the markdown file, it is loaded
-automatically and its comments are rendered as margin notes. No flag is needed.
+If a sidecar exists in the user cache directory for this markdown file, it
+is loaded automatically and its comments are rendered as margin notes. No
+flag is needed.
 
 Press Ctrl-C to stop the server cleanly.`,
 	Example: `  graphe serve path/to/post.md

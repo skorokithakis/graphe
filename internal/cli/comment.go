@@ -36,10 +36,11 @@ var commentCommand = &cobra.Command{
 	Use:   "comment",
 	Short: "Manage review comments on a markdown post.",
 	Long: `comment groups subcommands for adding, editing, deleting, and listing
-review comments stored in the sidecar file alongside a markdown post.
+review comments stored in the sidecar file for a markdown post.
 
 Each comment is anchored to a unique substring range in the post source.
-The sidecar file is named <stem>.graphe and lives next to the .md file.`,
+The sidecar file is stored in the user cache directory, keyed by the
+markdown file's path, so it does not appear next to the .md file.`,
 }
 
 var commentAddCommand = &cobra.Command{
@@ -51,8 +52,8 @@ either is ambiguous or missing, the command exits non-zero with an error.
 
 On success, the new comment ID (e.g. "c-a1b2") is printed to stdout.
 
-The comment is stored in a sidecar file next to the markdown file:
-  post.md -> post.graphe`,
+The comment is stored in a sidecar file in the user cache directory,
+keyed by the markdown file's resolved absolute path.`,
 	Example: `  graphe comment add post.md \
     --start "The quick brown fox" \
     --end "lazy dog" \
@@ -160,9 +161,9 @@ The command exits non-zero if the ID does not exist.`,
 var commentClearCommand = &cobra.Command{
 	Use:   "clear <file.md>",
 	Short: "Remove all review comments by deleting the sidecar file.",
-	Long: `clear deletes the sidecar file (<stem>.graphe) for the given markdown post,
-removing all comments at once. If no sidecar exists, the command exits
-successfully without printing an error.`,
+	Long: `clear deletes the sidecar file for the given markdown post from the user
+cache directory, removing all comments at once. If no sidecar exists, the
+command exits successfully without printing an error.`,
 	Example: `  graphe comment clear post.md`,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -226,7 +227,8 @@ The body is indented with two spaces. If there are no comments, nothing is print
 
 // flagStringOrNil returns a pointer to the flag value if it was explicitly set
 // by the user, or nil if the flag was not provided. This lets Edit distinguish
-// "user passed --start ''" from "user did not pass --start at all".
+// the case where the user passed --start with an empty value from the case
+// where --start was omitted entirely.
 func flagStringOrNil(cmd *cobra.Command, name string) *string {
 	if !cmd.Flags().Changed(name) {
 		return nil

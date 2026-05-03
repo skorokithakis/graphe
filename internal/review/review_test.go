@@ -14,11 +14,30 @@ import (
 // source is a representative post body used across tests.
 const source = "The quick brown fox jumps over the lazy dog. The fox is clever."
 
+// redirectCacheDir points the review package's cache dir at a fresh temp
+// directory for the duration of the test. The markdown file must also exist on
+// disk because SidecarPath calls filepath.EvalSymlinks.
+func redirectCacheDir(t *testing.T) string {
+	t.Helper()
+	cacheDir := t.TempDir()
+	restore := review.SetUserCacheDirForTest(func() (string, error) {
+		return cacheDir, nil
+	})
+	t.Cleanup(restore)
+	return cacheDir
+}
+
 // loadEmpty creates a Store backed by a temp directory with no pre-existing sidecar.
+// The markdown file is created on disk so that filepath.EvalSymlinks succeeds.
 func loadEmpty(t *testing.T) *review.Store {
 	t.Helper()
+	redirectCacheDir(t)
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "post.md")
+	// The file must exist for EvalSymlinks to resolve it.
+	if err := os.WriteFile(mdPath, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file: %v", err)
+	}
 	store, err := review.Load(mdPath)
 	if err != nil {
 		t.Fatalf("Load returned unexpected error: %v", err)
@@ -64,8 +83,12 @@ func TestAdd_Success(t *testing.T) {
 }
 
 func TestAdd_PersistsToDisk(t *testing.T) {
+	redirectCacheDir(t)
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "post.md")
+	if err := os.WriteFile(mdPath, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file: %v", err)
+	}
 
 	store, err := review.Load(mdPath)
 	if err != nil {
@@ -211,8 +234,12 @@ func TestAdd_OverlappingAnchorCountedCorrectly(t *testing.T) {
 }
 
 func TestClear_RemovesAllCommentsAndDeletesSidecar(t *testing.T) {
+	redirectCacheDir(t)
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "post.md")
+	if err := os.WriteFile(mdPath, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file: %v", err)
+	}
 
 	store, err := review.Load(mdPath)
 	if err != nil {
@@ -240,7 +267,10 @@ func TestClear_RemovesAllCommentsAndDeletesSidecar(t *testing.T) {
 	}
 
 	// Sidecar file must be gone from disk.
-	sidecarPath := filepath.Join(dir, "post.graphe")
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("SidecarPath: %v", err)
+	}
 	if _, err := os.Stat(sidecarPath); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("sidecar file still exists after Clear: %v", err)
 	}
@@ -269,8 +299,12 @@ func TestClear_IdempotentWhenNoSidecar(t *testing.T) {
 }
 
 func TestClear_SidecarDeletedExternallyReturnsZero(t *testing.T) {
+	redirectCacheDir(t)
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "post.md")
+	if err := os.WriteFile(mdPath, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file: %v", err)
+	}
 
 	store, err := review.Load(mdPath)
 	if err != nil {
@@ -283,7 +317,10 @@ func TestClear_SidecarDeletedExternallyReturnsZero(t *testing.T) {
 
 	// Simulate an external delete (or a race between Load and Clear) by removing
 	// the sidecar before Clear is called.
-	sidecarPath := filepath.Join(dir, "post.graphe")
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("SidecarPath: %v", err)
+	}
 	if err := os.Remove(sidecarPath); err != nil {
 		t.Fatalf("os.Remove sidecar: %v", err)
 	}
@@ -302,9 +339,13 @@ func TestClear_SidecarDeletedExternallyReturnsZero(t *testing.T) {
 	}
 }
 
-func TestSidecarPath_DerivedCorrectly(t *testing.T) {
+func TestSidecarPath_InCacheDir(t *testing.T) {
+	cacheDir := redirectCacheDir(t)
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "my-post.md")
+	if err := os.WriteFile(mdPath, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file: %v", err)
+	}
 
 	store, err := review.Load(mdPath)
 	if err != nil {
@@ -315,8 +356,46 @@ func TestSidecarPath_DerivedCorrectly(t *testing.T) {
 		t.Fatalf("Add: %v", err)
 	}
 
-	expectedSidecar := filepath.Join(dir, "my-post.graphe")
-	if _, err := os.Stat(expectedSidecar); err != nil {
-		t.Errorf("sidecar file not found at expected path %s: %v", expectedSidecar, err)
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("SidecarPath: %v", err)
+	}
+
+	// Sidecar must live inside the cache dir, not next to the markdown file.
+	if _, err := os.Stat(sidecarPath); err != nil {
+		t.Errorf("sidecar file not found at cache path %s: %v", sidecarPath, err)
+	}
+	if filepath.Dir(sidecarPath) != filepath.Join(cacheDir, "graphe") {
+		t.Errorf("sidecar not in cache dir: got %s, want dir %s", sidecarPath, filepath.Join(cacheDir, "graphe"))
+	}
+}
+
+func TestSidecarPath_DifferentDirsSameBasename(t *testing.T) {
+	redirectCacheDir(t)
+
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+	mdPath1 := filepath.Join(dir1, "post.md")
+	mdPath2 := filepath.Join(dir2, "post.md")
+	if err := os.WriteFile(mdPath1, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file 1: %v", err)
+	}
+	if err := os.WriteFile(mdPath2, []byte(""), 0o600); err != nil {
+		t.Fatalf("creating markdown file 2: %v", err)
+	}
+
+	sidecar1, err := review.SidecarPath(mdPath1)
+	if err != nil {
+		t.Fatalf("SidecarPath 1: %v", err)
+	}
+	sidecar2, err := review.SidecarPath(mdPath2)
+	if err != nil {
+		t.Fatalf("SidecarPath 2: %v", err)
+	}
+
+	// Two files with the same basename in different directories must get
+	// different sidecars.
+	if sidecar1 == sidecar2 {
+		t.Errorf("same sidecar path for different directories: %s", sidecar1)
 	}
 }

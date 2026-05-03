@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package review handles the comment store for a single markdown post.
-// Each post's comments are persisted in a sidecar file alongside the
-// markdown file (e.g. post.md -> post.graphe).
+// Each post's comments are persisted in a sidecar file inside the user's
+// cache directory, keyed by a hash of the markdown file's absolute path.
 package review
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +19,12 @@ import (
 	"strings"
 	"time"
 )
+
+// userCacheDir is a function variable so tests can redirect the cache to a
+// temporary directory without touching $HOME or $XDG_CACHE_HOME. Production
+// code always uses os.UserCacheDir. It is exported via SetUserCacheDirForTest
+// in testing_helpers.go for use by external test packages.
+var userCacheDir = os.UserCacheDir
 
 // Comment is a single review annotation anchored to a substring of the post source.
 type Comment struct {
@@ -29,7 +37,7 @@ type Comment struct {
 
 // Store holds all comments for one post and knows where to persist them.
 type Store struct {
-	// sidecarPath is the path to the JSON file (derived from the .md path).
+	// sidecarPath is the path to the JSON file inside the user cache dir.
 	sidecarPath string
 	comments    []Comment
 }
@@ -42,7 +50,10 @@ type sidecarJSON struct {
 // Load reads the sidecar file for the given markdown path. If the sidecar does
 // not exist, an empty Store is returned without error.
 func Load(mdPath string) (*Store, error) {
-	sidecarPath := sidecarPathFor(mdPath)
+	sidecarPath, err := SidecarPath(mdPath)
+	if err != nil {
+		return nil, fmt.Errorf("resolving sidecar path: %w", err)
+	}
 
 	data, err := os.ReadFile(sidecarPath)
 	if errors.Is(err, os.ErrNotExist) {
@@ -65,7 +76,14 @@ func Load(mdPath string) (*Store, error) {
 
 // Save writes the store to its sidecar file. Comments are sorted by CreatedAt
 // ascending so that diffs are stable regardless of insertion order.
+//
+// The cache directory is created here on first write rather than at Load time
+// so that reading a post with no comments never creates an empty directory.
 func (s *Store) Save() error {
+	if err := os.MkdirAll(filepath.Dir(s.sidecarPath), 0o700); err != nil {
+		return fmt.Errorf("creating cache directory: %w", err)
+	}
+
 	sorted := make([]Comment, len(s.comments))
 	copy(sorted, s.comments)
 	sort.Slice(sorted, func(i, j int) bool {
@@ -301,11 +319,49 @@ func (s *Store) findIndex(id string) int {
 	return -1
 }
 
-// sidecarPathFor derives the sidecar path from a markdown file path.
-// "/path/to/post.md" -> "/path/to/post.graphe".
-func sidecarPathFor(mdPath string) string {
-	// filepath.Ext only considers dots within the final path element, which
-	// avoids incorrectly stripping at a dot in a parent directory name.
-	ext := filepath.Ext(mdPath)
-	return strings.TrimSuffix(mdPath, ext) + ".graphe"
+// SidecarPath returns the path to the sidecar file for the given markdown file.
+// The sidecar lives in <UserCacheDir>/graphe/<hash>.graphe, where <hash> is the
+// first 16 hex characters of the SHA-256 of the symlink-resolved absolute path
+// of the markdown file. This keeps sidecars out of source directories and
+// ensures two files with the same basename in different directories get separate
+// sidecars.
+//
+// Callers must ensure the markdown file exists on disk before calling
+// SidecarPath, because filepath.EvalSymlinks requires the path to be present.
+func SidecarPath(mdPath string) (string, error) {
+	absPath, err := filepath.Abs(mdPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving absolute path of %s: %w", mdPath, err)
+	}
+
+	// Resolve symlinks so that two paths pointing at the same inode share one
+	// sidecar. EvalSymlinks requires the file to exist.
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving symlinks for %s: %w", absPath, err)
+	}
+
+	sum := sha256.Sum256([]byte(resolvedPath))
+	hash := hex.EncodeToString(sum[:])[:16]
+
+	cacheBase, err := userCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("locating user cache directory: %w", err)
+	}
+
+	return filepath.Join(cacheBase, "graphe", hash+".graphe"), nil
+}
+
+// EnsureCacheDir creates the graphe cache directory if it does not already
+// exist. The watcher needs the directory to exist before calling watcher.Add,
+// so the server calls this at startup rather than waiting for the first Save.
+func EnsureCacheDir() error {
+	cacheBase, err := userCacheDir()
+	if err != nil {
+		return fmt.Errorf("locating user cache directory: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(cacheBase, "graphe"), 0o700); err != nil {
+		return fmt.Errorf("creating cache directory: %w", err)
+	}
+	return nil
 }

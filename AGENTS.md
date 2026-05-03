@@ -6,7 +6,8 @@ Notes for agents working in this repo. Read once per session.
 
 `graphe` is a Go CLI that serves a markdown file as a Tufte-style web page
 and overlays reviewer comments as margin notes. Comments live in a sidecar
-file next to the markdown; the browser auto-reloads on changes via SSE.
+file in the user cache directory (keyed by the markdown file's path); the
+browser auto-reloads on changes via SSE.
 
 License: AGPL-3.0-or-later. Every Go file starts with the SPDX header.
 
@@ -21,12 +22,13 @@ License: AGPL-3.0-or-later. Every Go file starts with the SPDX header.
   it, so do not normalise it.
 - `internal/review/` — comment store. Loads/saves the sidecar JSON,
   validates anchors (each must match exactly once and end must not fall
-  inside start), generates `c-xxxx` IDs.
+  inside start), generates `c-xxxx` IDs. `SidecarPath` is the single
+  source of truth for the sidecar location.
 - `internal/server/` — HTTP server, SSE broadcaster, fsnotify watcher.
-  - `watcher.go` watches the parent directory (not the files directly)
-    so atomic-save renames don't drop the watch, and so a sidecar
-    created after startup is still picked up. Events are debounced
-    150 ms.
+  - `watcher.go` watches both the markdown file's parent directory and
+    the graphe cache directory. The markdown directory watch uses the
+    same atomic-save-safe approach as before; the cache directory watch
+    picks up sidecar writes. Events are debounced 150 ms.
 - `testdata/` — `sample.md` + `sample.graphe` fixture.
 
 ## Conventions
@@ -44,18 +46,19 @@ License: AGPL-3.0-or-later. Every Go file starts with the SPDX header.
 
 ## Sidecar file
 
-`<stem>.graphe` next to the markdown file (e.g. `post.md` → `post.graphe`).
-Shape:
+`<UserCacheDir>/graphe/<16hex>.graphe`, where `<16hex>` is the first 16
+hex characters of the SHA-256 of the symlink-resolved absolute path of the
+markdown file. Shape:
 
 ```json
 { "comments": [ { "id": "c-a1b2", "start": "...", "end": "...", "body": "...", "created_at": "..." } ] }
 ```
 
-The path is derived in three places that must stay in sync:
-- `internal/review/review.go` — `sidecarPathFor`
-- `internal/server/watcher.go` — `sidecarBasename`
-- Documentation strings in `internal/cli/comment.go` and
-  `internal/cli/help.go`, plus the README.
+The path is derived in one Go location:
+- `internal/review/review.go` — `SidecarPath` (exported)
+
+Documentation strings in `internal/cli/comment.go`, `internal/cli/help.go`,
+and the README describe the cache-dir location in prose.
 
 ## Build, test, run
 

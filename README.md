@@ -7,9 +7,10 @@ designed for human-LLM collaborative prose review.
 
 graphe serves a single markdown file as a Tufte-style page and overlays
 reviewer comments as post-it style margin notes. Comments live in a sidecar
-JSON file and are managed through a small CLI, which means an LLM can add,
-list, edit, and delete them directly. The browser reloads automatically
-whenever the post or its comments change.
+JSON file in the user cache directory (keyed by the markdown file's path)
+and are managed through a small CLI, which means an LLM can add, list,
+edit, and delete them directly. The browser reloads automatically whenever
+the post or its comments change.
 
 ## Install
 

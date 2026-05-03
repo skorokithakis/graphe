@@ -9,9 +9,9 @@ where a human author asks an LLM to review a draft: the human runs the server,
 the LLM adds structured comments via the CLI, and the human reads the rendered
 page to decide which feedback to act on.
 
-Comments are stored in a sidecar file (<stem>.graphe) that lives next to
-the markdown file. The browser page reloads automatically whenever either
-file changes.
+Comments are stored in a sidecar file in the user cache directory, keyed
+by the markdown file's path. The browser page reloads automatically
+whenever the markdown file or its sidecar changes.
 
 
 WHEN TO USE IT

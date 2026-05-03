@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/skorokithakis/graphe/internal/review"
 	"github.com/skorokithakis/graphe/internal/server"
 )
 
@@ -40,8 +41,23 @@ var fixtureSidecar = map[string]interface{}{
 	},
 }
 
+// redirectCacheDir points the review package's cache dir at a fresh temp
+// directory for the duration of the test.
+func redirectCacheDir(t *testing.T) string {
+	t.Helper()
+	cacheDir := t.TempDir()
+	restore := review.SetUserCacheDirForTest(func() (string, error) {
+		return cacheDir, nil
+	})
+	t.Cleanup(restore)
+	return cacheDir
+}
+
+// writeFixtures writes the markdown fixture and its sidecar to a temp dir,
+// placing the sidecar in the (redirected) cache dir. Returns the markdown path.
 func writeFixtures(t *testing.T) string {
 	t.Helper()
+	redirectCacheDir(t)
 	dir := t.TempDir()
 
 	mdPath := filepath.Join(dir, "post.md")
@@ -49,7 +65,14 @@ func writeFixtures(t *testing.T) string {
 		t.Fatalf("writing markdown fixture: %v", err)
 	}
 
-	sidecarPath := filepath.Join(dir, "post.graphe")
+	// Derive the sidecar path from the review package so it lands in the cache dir.
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("resolving sidecar path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(sidecarPath), 0o700); err != nil {
+		t.Fatalf("creating cache dir: %v", err)
+	}
 	sidecarData, err := json.MarshalIndent(fixtureSidecar, "", "  ")
 	if err != nil {
 		t.Fatalf("marshalling sidecar fixture: %v", err)
@@ -159,7 +182,10 @@ func TestServer_DeleteComment_Success(t *testing.T) {
 	}
 
 	// Confirm the sidecar no longer contains the comment.
-	sidecarPath := strings.TrimSuffix(mdPath, ".md") + ".graphe"
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("resolving sidecar path: %v", err)
+	}
 	data, err := os.ReadFile(sidecarPath)
 	if err != nil {
 		t.Fatalf("reading sidecar after delete: %v", err)
@@ -330,6 +356,7 @@ func TestServer_NoJumpOnDuplicateAnchorInsert(t *testing.T) {
 // A's translated endIndex + len(A.End). The old code used that stale extent
 // and dropped B; the fix treats orphan spans as zero-width so B is kept.
 func TestServer_OrphanOverlapDoesNotBlockLaterAnchoredComment(t *testing.T) {
+	redirectCacheDir(t)
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "post.md")
 
@@ -357,7 +384,14 @@ func TestServer_OrphanOverlapDoesNotBlockLaterAnchoredComment(t *testing.T) {
 			},
 		},
 	}
-	sidecarPath := filepath.Join(dir, "post.graphe")
+
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("resolving sidecar path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(sidecarPath), 0o700); err != nil {
+		t.Fatalf("creating cache dir: %v", err)
+	}
 	sidecarData, err := json.MarshalIndent(sidecar, "", "  ")
 	if err != nil {
 		t.Fatalf("marshalling sidecar: %v", err)

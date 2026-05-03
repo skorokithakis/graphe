@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/skorokithakis/graphe/internal/review"
 )
 
 // debounceDelay is how long to wait after the last file event before reloading.
@@ -23,25 +24,40 @@ const debounceDelay = 150 * time.Millisecond
 // Watch returns when ctx is cancelled. The caller is responsible for providing
 // a context that is cancelled when the server should stop (e.g., on SIGINT).
 func (s *Server) Watch(ctx context.Context) error {
+	sidecarPath, err := review.SidecarPath(s.mdPath)
+	if err != nil {
+		return err
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
 	defer watcher.Close()
 
-	// Watch the parent directory rather than the files directly. Editors that
-	// use atomic saves (write to a temp file then rename) would cause a
-	// directly-watched file to lose its watch after the rename. Watching the
-	// directory catches Create/Rename events for both the .md and the
-	// .graphe sidecar regardless of whether the sidecar exists at startup.
-	directory := filepath.Dir(s.mdPath)
-	if err := watcher.Add(directory); err != nil {
+	// Watch the markdown file's parent directory rather than the file directly.
+	// Editors that use atomic saves (write to a temp file then rename) would
+	// cause a directly-watched file to lose its watch after the rename. Watching
+	// the directory catches Create/Rename events regardless of whether the file
+	// exists at startup.
+	mdDirectory := filepath.Dir(s.mdPath)
+	if err := watcher.Add(mdDirectory); err != nil {
 		return err
+	}
+
+	// Watch the cache directory for sidecar changes. The cache dir is guaranteed
+	// to exist at this point because New calls review.EnsureCacheDir before
+	// starting the watcher.
+	cacheDirectory := filepath.Dir(sidecarPath)
+	if cacheDirectory != mdDirectory {
+		if err := watcher.Add(cacheDirectory); err != nil {
+			return err
+		}
 	}
 
 	// The two filenames we care about: the markdown source and its sidecar.
 	mdBase := filepath.Base(s.mdPath)
-	sidecarBase := sidecarBasename(s.mdPath)
+	sidecarBase := filepath.Base(sidecarPath)
 
 	var debounceTimer *time.Timer
 
@@ -92,13 +108,4 @@ func (s *Server) Watch(ctx context.Context) error {
 			log.Printf("watcher: fsnotify error: %v", err)
 		}
 	}
-}
-
-// sidecarBasename returns the basename of the .graphe sidecar for the
-// given markdown path. For example, "post.md" → "post.graphe".
-func sidecarBasename(mdPath string) string {
-	base := filepath.Base(mdPath)
-	ext := filepath.Ext(base)
-	stem := base[:len(base)-len(ext)]
-	return stem + ".graphe"
 }
