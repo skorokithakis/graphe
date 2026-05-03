@@ -153,10 +153,13 @@ inserted <mark> tag.
 
 COMMAND REFERENCE
 
-  graphe serve <file.md>
+  graphe serve <file.md> [--host HOST] [--port PORT]
     Start the browser preview server. The page reloads on every save.
-    Example:
+    Defaults to 127.0.0.1:7290.
+    Examples:
       graphe serve drafts/essay.md
+      graphe serve drafts/essay.md --port 8080
+      graphe serve drafts/essay.md --host 0.0.0.0 --port 7290
 
   graphe comment add <file.md> --start "..." --end "..." --body "..."
     Add a new comment anchored to the range [start, end]. Prints the new ID.

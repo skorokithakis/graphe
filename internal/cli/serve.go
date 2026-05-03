@@ -19,11 +19,19 @@ import (
 )
 
 const (
-	serveAddress     = "127.0.0.1:7290"
-	shutdownTimeout  = 5 * time.Second
+	defaultHost     = "127.0.0.1"
+	defaultPort     = 7290
+	shutdownTimeout = 5 * time.Second
+)
+
+var (
+	serveHost string
+	servePort int
 )
 
 func init() {
+	serveCommand.Flags().StringVar(&serveHost, "host", defaultHost, "Host or IP to bind the server to")
+	serveCommand.Flags().IntVar(&servePort, "port", defaultPort, "TCP port to listen on")
 	rootCommand.AddCommand(serveCommand)
 }
 
@@ -31,15 +39,17 @@ var serveCommand = &cobra.Command{
 	Use:   "serve <file.md>",
 	Short: "Serve a markdown post in the browser with live reload.",
 	Long: `serve renders the given markdown file as a Tufte-style post and serves it
-at http://127.0.0.1:7290 (fixed port). The page reloads automatically in the
-browser whenever the markdown file or its review sidecar changes on disk.
+over HTTP. By default it binds to 127.0.0.1:7290; override with --host and
+--port. The page reloads automatically in the browser whenever the markdown
+file or its review sidecar changes on disk.
 
 If a <stem>-review.json sidecar exists next to the markdown file, it is loaded
 automatically and its comments are rendered as margin notes. No flag is needed.
 
 Press Ctrl-C to stop the server cleanly.`,
 	Example: `  graphe serve path/to/post.md
-  graphe serve ~/drafts/essay.md`,
+  graphe serve ~/drafts/essay.md --port 8080
+  graphe serve essay.md --host 0.0.0.0 --port 7290`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		mdPath := args[0]
@@ -54,7 +64,9 @@ Press Ctrl-C to stop the server cleanly.`,
 			return fmt.Errorf("initialising server: %w", err)
 		}
 
-		listener, err := net.Listen("tcp", serveAddress)
+		address := net.JoinHostPort(serveHost, fmt.Sprintf("%d", servePort))
+
+		listener, err := net.Listen("tcp", address)
 		if err != nil {
 			// net.Listen returns a *net.OpError whose Err field is a *os.SyscallError
 			// wrapping syscall.EADDRINUSE when the port is taken. We check for that
@@ -63,14 +75,14 @@ Press Ctrl-C to stop the server cleanly.`,
 			if errors.As(err, &opError) {
 				var syscallError *os.SyscallError
 				if errors.As(opError.Err, &syscallError) && errors.Is(syscallError.Err, syscall.EADDRINUSE) {
-					fmt.Fprintf(os.Stderr, "port 7290 already in use\n")
+					fmt.Fprintf(os.Stderr, "port %d on %s already in use\n", servePort, serveHost)
 					os.Exit(1)
 				}
 			}
-			return fmt.Errorf("listening on %s: %w", serveAddress, err)
+			return fmt.Errorf("listening on %s: %w", address, err)
 		}
 
-		fmt.Printf("graphe serving %s at http://%s\n", absPath, serveAddress)
+		fmt.Printf("graphe serving %s at http://%s\n", absPath, address)
 
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
