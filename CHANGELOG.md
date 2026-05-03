@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1](https://github.com/skorokithakis/graphe/compare/v0.1.0...v0.1.1) (2026-05-03)
+
+
+### Features
+
+* Move navigation chevrons to a fixed global position ([c25da09](https://github.com/skorokithakis/graphe/commit/c25da093413d71998a3766d1b898ced1ffd808bd))
+* Preserve collapsed/expanded post-it state ([ee0e83e](https://github.com/skorokithakis/graphe/commit/ee0e83ead6341954e3affc37bca99c18c16984ea))
+* Redirect unknown GET paths to the index ([273a7c2](https://github.com/skorokithakis/graphe/commit/273a7c2b8f8bfb50e8c2c86e427a18764e568832))
+
 ## 0.1.0 (2026-05-03)
 
 
