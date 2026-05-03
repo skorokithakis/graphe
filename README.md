@@ -12,6 +12,12 @@ and are managed through a small CLI, which means an LLM can add, list,
 edit, and delete them directly. The browser reloads automatically whenever
 the post or its comments change.
 
+<p align="center">
+  <a href="misc/screenshot.png">
+    <img src="misc/screenshot.png" alt="graphe screenshot" width="600">
+  </a>
+</p>
+
 ## Install
 
 ### Homebrew (macOS, Linux)
