@@ -407,9 +407,11 @@ type anchorSpan struct {
 func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment, knownOffsets map[string]commentOffset) (template.HTML, []renderedComment, map[string]commentOffset, error) {
 	source := loadedPost.Source
 
-	// Build a set of line-start byte offsets that fall inside fenced code blocks
-	// so we can skip anchors that land there. A simple state machine is sufficient
-	// because we only need to match what goldmark sees, not parse full markdown.
+	// Build a map from line-start byte offset to the opening-fence line offset
+	// for every line that must not receive an inserted <mark> open tag (fence
+	// marker lines and lines inside the fence body). The opening-fence offset is
+	// used to place orphan pins just before the fence, where goldmark renders
+	// them as real HTML rather than escaping them inside the <pre>.
 	fencedLineOffsets := fencedCodeBlockLineOffsets(source)
 
 	// bootstrapped collects offsets resolved via strict anchor lookup this
@@ -440,12 +442,33 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment, knownO
 			anchored := sourceMatchesAt(source, startIndex, comment.Start) &&
 				sourceMatchesAt(source, endIndex, comment.End)
 
-			// If the translated position now falls inside a fenced code block,
-			// goldmark would escape the inserted <mark> tag and show raw HTML to
-			// the user. Downgrade to an orphan so the pin is inserted as a plain
-			// <span> instead, which goldmark also escapes but is harmless.
-			if anchored && fencedLineOffsets[lineStartOffset(source, startIndex)] {
-				anchored = false
+			// If the translated position now falls inside a fenced code block (or
+			// on a fence-marker line), inserting a <mark> would break goldmark's
+			// fence detection or be escaped inside the <pre>. Downgrade to an
+			// orphan and move the pin to the opening fence line, which is outside
+			// the fence body and renders as real HTML.
+			if anchored {
+				if openingFence, inFence := fencedLineOffsets[lineStartOffset(source, startIndex)]; inFence {
+					anchored = false
+					startIndex = openingFence
+				}
+			}
+
+			// Shift the open-tag past any block-level prefix when the anchor
+			// starts at the very beginning of a line. Without this, goldmark sees
+			// the raw <mark> before the '#'/'- '/'> ' marker and renders the line
+			// as an inline-HTML paragraph instead of a heading/list/blockquote.
+			// The shift is only applied to anchored spans; orphan pins are
+			// zero-width <span> elements that do not affect block parsing.
+			if anchored {
+				lineStart := lineStartOffset(source, startIndex)
+				if startIndex == lineStart {
+					shifted := skipBlockPrefixes(source, lineStart)
+					endOfSpan := endIndex + len(comment.End)
+					if shifted < endOfSpan {
+						startIndex = shifted
+					}
+				}
 			}
 
 			spans = append(spans, anchorSpan{
@@ -478,9 +501,34 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment, knownO
 			continue
 		}
 
-		if fencedLineOffsets[lineStartOffset(source, startIndex)] {
-			log.Printf("comment %s: anchors inside a code block, skipping", comment.ID)
+		if openingFence, inFence := fencedLineOffsets[lineStartOffset(source, startIndex)]; inFence {
+			// The anchor lands on a fence-marker line or inside a fenced code
+			// block. Inserting a <mark> there would break goldmark's fence
+			// detection or be escaped inside the <pre>. Downgrade to an orphan
+			// pin placed at the opening fence line, which is outside the fence
+			// body and renders as real HTML. The raw startIndex/endIndex are
+			// stored so the diff tracker can follow the anchor through future
+			// edits; the pin's visual position uses openingFence.
+			bootstrapped[comment.ID] = commentOffset{start: startIndex, end: endIndex}
+			spans = append(spans, anchorSpan{
+				comment:    comment,
+				startIndex: openingFence,
+				endIndex:   endIndex,
+				orphaned:   true,
+			})
 			continue
+		}
+
+		// Shift the open-tag past any block-level prefix when the anchor
+		// starts at the very beginning of a line. Same rationale as the
+		// known-offset path above.
+		lineStart := lineStartOffset(source, startIndex)
+		if startIndex == lineStart {
+			shifted := skipBlockPrefixes(source, lineStart)
+			endOfSpan := endIndex + len(comment.End)
+			if shifted < endOfSpan {
+				startIndex = shifted
+			}
 		}
 
 		bootstrapped[comment.ID] = commentOffset{start: startIndex, end: endIndex}
@@ -540,6 +588,17 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment, knownO
 			// Orphaned comments get a zero-width pin so the frontend can
 			// position the post-it near where the anchor used to be.
 			pin := []byte(fmt.Sprintf(`<span class="orphan-pin" data-comment-id="%s"></span>`, span.comment.ID))
+			// When the pin lands at the very start of a line (e.g. it was
+			// relocated to an opening fence marker line), goldmark sees the
+			// inline HTML and the fence marker on the same line:
+			//   <span ...></span>```python
+			// and parses the whole line as an inline-HTML paragraph, breaking
+			// the fence. A trailing newline pushes the fence marker to its own
+			// line so goldmark recognises it correctly. Mid-line pins must not
+			// get the newline — it would split a paragraph mid-sentence.
+			if span.startIndex == lineStartOffset(source, span.startIndex) {
+				pin = append(pin, '\n')
+			}
 			annotated = insertBytes(annotated, span.startIndex, pin)
 		} else {
 			endOfSpan := span.endIndex + len(span.comment.End)
@@ -635,21 +694,41 @@ func countOverlappingOccurrences(s, sub string) int {
 	return count
 }
 
-// fencedCodeBlockLineOffsets returns a set of byte offsets (one per line) that
-// fall inside a fenced code block in the markdown source. A simple state machine
-// is used: lines starting with ``` or ~~~ toggle the fence state. This matches
+// fencedCodeBlockLineOffsets returns a map from line-start byte offset to the
+// byte offset of the corresponding opening fence marker line, for every line
+// that must not receive an inserted <mark> open tag. A simple state machine is
+// used: lines starting with ``` or ~~~ toggle the fence state. This matches
 // what goldmark sees without attempting full markdown parsing.
-func fencedCodeBlockLineOffsets(source string) map[int]bool {
-	offsets := map[int]bool{}
-	inFence := false
+//
+// Both fence-marker lines and lines inside the fence body are included. An
+// anchor starting on a fence-marker line would open the <mark> before the
+// backticks, causing goldmark to parse the line as an inline-HTML paragraph and
+// break the code block entirely. The opening-fence offset stored as the value
+// lets callers place orphan pins just before the fence, where goldmark renders
+// them as real HTML rather than escaping them inside the <pre>.
+func fencedCodeBlockLineOffsets(source string) map[int]int {
+	// openingFence is the line offset of the most recently seen opening fence
+	// marker. -1 means we are not currently inside a fence.
+	openingFence := -1
+	offsets := map[int]int{}
 	lineOffset := 0
 	for _, line := range strings.Split(source, "\n") {
 		trimmed := strings.TrimLeft(line, " \t")
 		isFenceMarker := strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
 		if isFenceMarker {
-			inFence = !inFence
-		} else if inFence {
-			offsets[lineOffset] = true
+			if openingFence == -1 {
+				// Opening fence: record the marker line itself. The opening
+				// fence maps to itself so callers always get a valid insertion
+				// point outside the fence body.
+				openingFence = lineOffset
+				offsets[lineOffset] = lineOffset
+			} else {
+				// Closing fence: record it and reset state.
+				offsets[lineOffset] = openingFence
+				openingFence = -1
+			}
+		} else if openingFence != -1 {
+			offsets[lineOffset] = openingFence
 		}
 		// +1 for the newline that Split consumed.
 		lineOffset += len(line) + 1
@@ -665,4 +744,100 @@ func lineStartOffset(source string, position int) int {
 		return 0
 	}
 	return lastNewline + 1
+}
+
+// skipBlockPrefixes returns the offset past all stacked block-level prefixes on
+// the line beginning at lineStart. It handles up to 3 leading spaces of
+// indentation, then one marker per pass: ATX heading markers ('#{1,6}' +
+// space/tab), bullet list markers ('[-+*]' + space/tab), ordered list markers
+// ('\d{1,9}[.)]' + space/tab), and blockquote markers ('>' + optional space).
+// Blockquote markers are repeated to handle nesting (e.g. '> ## ' skips both
+// the '> ' and the '## '). The returned offset is always >= lineStart.
+//
+// Setext headings ('===' or '---' underlines) cannot be fixed by shifting the
+// open-tag position because the heading text and the underline are on separate
+// lines; the <mark> would still open before the underline. We leave them as-is.
+func skipBlockPrefixes(source string, lineStart int) int {
+	position := lineStart
+	sourceLength := len(source)
+
+	for {
+		if position >= sourceLength {
+			return position
+		}
+
+		// Skip up to 3 leading spaces (CommonMark allows 0–3 spaces before
+		// block markers; 4+ spaces trigger an indented code block instead).
+		spaceCount := 0
+		for spaceCount < 3 && position+spaceCount < sourceLength && source[position+spaceCount] == ' ' {
+			spaceCount++
+		}
+		afterSpaces := position + spaceCount
+
+		if afterSpaces >= sourceLength {
+			return position
+		}
+
+		advanced := false
+
+		// ATX heading: '#{1,6}' followed by a space or tab.
+		if source[afterSpaces] == '#' {
+			hashCount := 0
+			for hashCount < 6 && afterSpaces+hashCount < sourceLength && source[afterSpaces+hashCount] == '#' {
+				hashCount++
+			}
+			afterHashes := afterSpaces + hashCount
+			if hashCount >= 1 && afterHashes < sourceLength && (source[afterHashes] == ' ' || source[afterHashes] == '\t') {
+				position = afterHashes + 1
+				advanced = true
+			}
+		}
+
+		// Bullet list: '[-+*]' followed by a space or tab.
+		if !advanced && (source[afterSpaces] == '-' || source[afterSpaces] == '+' || source[afterSpaces] == '*') {
+			afterMarker := afterSpaces + 1
+			if afterMarker < sourceLength && (source[afterMarker] == ' ' || source[afterMarker] == '\t') {
+				position = afterMarker + 1
+				advanced = true
+			}
+		}
+
+		// Ordered list: 1–9 digits followed by '.' or ')' and a space or tab.
+		if !advanced && source[afterSpaces] >= '0' && source[afterSpaces] <= '9' {
+			digitCount := 0
+			for digitCount < 9 && afterSpaces+digitCount < sourceLength && source[afterSpaces+digitCount] >= '0' && source[afterSpaces+digitCount] <= '9' {
+				digitCount++
+			}
+			afterDigits := afterSpaces + digitCount
+			if digitCount >= 1 && afterDigits < sourceLength && (source[afterDigits] == '.' || source[afterDigits] == ')') {
+				afterPunct := afterDigits + 1
+				if afterPunct < sourceLength && (source[afterPunct] == ' ' || source[afterPunct] == '\t') {
+					position = afterPunct + 1
+					advanced = true
+				}
+			}
+		}
+
+		// Blockquote: '>' followed by an optional space. Repeated each pass to
+		// handle nested blockquotes (e.g. '> > ' advances twice).
+		if !advanced && source[afterSpaces] == '>' {
+			afterMarker := afterSpaces + 1
+			// Consume the optional space after '>'.
+			if afterMarker < sourceLength && source[afterMarker] == ' ' {
+				afterMarker++
+			}
+			position = afterMarker
+			advanced = true
+			// Loop again: the next pass may find another '>' or a heading/list
+			// marker inside the blockquote.
+			continue
+		}
+
+		if !advanced {
+			return position
+		}
+
+		// A non-blockquote marker was consumed; stop after one such marker.
+		return position
+	}
 }

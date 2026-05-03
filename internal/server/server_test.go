@@ -446,6 +446,223 @@ func TestServer_OrphanOverlapDoesNotBlockLaterAnchoredComment(t *testing.T) {
 	}
 }
 
+// writeCustomFixtures writes a markdown file and a sidecar with a single
+// comment to a temp dir. It returns the markdown path. The comment anchors
+// start..end with the given body.
+func writeCustomFixtures(t *testing.T, markdown, start, end, body string) string {
+	t.Helper()
+	redirectCacheDir(t)
+	dir := t.TempDir()
+
+	mdPath := filepath.Join(dir, "post.md")
+	if err := os.WriteFile(mdPath, []byte(markdown), 0o600); err != nil {
+		t.Fatalf("writing markdown fixture: %v", err)
+	}
+
+	sidecarPath, err := review.SidecarPath(mdPath)
+	if err != nil {
+		t.Fatalf("resolving sidecar path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(sidecarPath), 0o700); err != nil {
+		t.Fatalf("creating cache dir: %v", err)
+	}
+
+	sidecar := map[string]interface{}{
+		"comments": []map[string]interface{}{
+			{
+				"id":         "c-blkp",
+				"start":      start,
+				"end":        end,
+				"body":       body,
+				"created_at": time.Now().UTC().Format(time.RFC3339),
+			},
+		},
+	}
+	sidecarData, err := json.MarshalIndent(sidecar, "", "  ")
+	if err != nil {
+		t.Fatalf("marshalling sidecar: %v", err)
+	}
+	if err := os.WriteFile(sidecarPath, sidecarData, 0o600); err != nil {
+		t.Fatalf("writing sidecar: %v", err)
+	}
+
+	return mdPath
+}
+
+// renderPage is a test helper that creates a server for the given markdown path
+// and returns the rendered HTML body of the index page.
+func renderPage(t *testing.T, mdPath string) string {
+	t.Helper()
+	srv, err := server.New(mdPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("GET / returned %d, want 200", recorder.Code)
+	}
+	return recorder.Body.String()
+}
+
+// TestServer_BlockPrefix_Heading verifies that a comment whose start anchor
+// covers the full text of an ATX heading line (including the '## ' prefix)
+// renders as a proper <h2> element wrapping the <mark>, not as a literal
+// paragraph containing the raw '## ' characters.
+func TestServer_BlockPrefix_Heading(t *testing.T) {
+	markdown := "## Section title\n\nSome text.\n"
+	mdPath := writeCustomFixtures(t, markdown, "## Section title", "## Section title", "heading comment")
+
+	body := renderPage(t, mdPath)
+
+	if !strings.Contains(body, "<h2>") {
+		t.Errorf("expected <h2> in rendered HTML; got:\n%s", body)
+	}
+	if !strings.Contains(body, `<mark class="anchor"`) {
+		t.Errorf("expected <mark class=\"anchor\"> in rendered HTML; got:\n%s", body)
+	}
+	// The raw '## ' prefix must not appear as literal text inside a paragraph.
+	if strings.Contains(body, "<p>## ") {
+		t.Errorf("heading prefix rendered as literal paragraph text; got:\n%s", body)
+	}
+}
+
+// TestServer_BlockPrefix_BulletList verifies that a comment whose start anchor
+// covers the full text of a bullet list item (including the '- ' prefix)
+// renders as a proper <ul><li> element wrapping the <mark>.
+func TestServer_BlockPrefix_BulletList(t *testing.T) {
+	markdown := "- list item\n\nSome text.\n"
+	mdPath := writeCustomFixtures(t, markdown, "- list item", "- list item", "list comment")
+
+	body := renderPage(t, mdPath)
+
+	if !strings.Contains(body, "<ul>") {
+		t.Errorf("expected <ul> in rendered HTML; got:\n%s", body)
+	}
+	if !strings.Contains(body, "<li>") {
+		t.Errorf("expected <li> in rendered HTML; got:\n%s", body)
+	}
+	if !strings.Contains(body, `<mark class="anchor"`) {
+		t.Errorf("expected <mark class=\"anchor\"> in rendered HTML; got:\n%s", body)
+	}
+	// The raw '- ' prefix must not appear as literal text inside a paragraph.
+	if strings.Contains(body, "<p>- ") {
+		t.Errorf("list prefix rendered as literal paragraph text; got:\n%s", body)
+	}
+}
+
+// TestServer_BlockPrefix_Blockquote verifies that a comment whose start anchor
+// covers the full text of a blockquote line (including the '> ' prefix)
+// renders as a proper <blockquote> element wrapping the <mark>.
+func TestServer_BlockPrefix_Blockquote(t *testing.T) {
+	markdown := "> quoted text\n\nSome text.\n"
+	mdPath := writeCustomFixtures(t, markdown, "> quoted text", "> quoted text", "blockquote comment")
+
+	body := renderPage(t, mdPath)
+
+	if !strings.Contains(body, "<blockquote>") {
+		t.Errorf("expected <blockquote> in rendered HTML; got:\n%s", body)
+	}
+	if !strings.Contains(body, `<mark class="anchor"`) {
+		t.Errorf("expected <mark class=\"anchor\"> in rendered HTML; got:\n%s", body)
+	}
+	// The raw '> ' prefix must not appear as literal text inside a paragraph.
+	if strings.Contains(body, "<p>&gt; ") || strings.Contains(body, "<p>> ") {
+		t.Errorf("blockquote prefix rendered as literal paragraph text; got:\n%s", body)
+	}
+}
+
+// TestServer_BlockPrefix_MidLineHeading verifies that a comment whose start
+// anchor begins mid-line inside a heading (not at the line start) is left
+// unchanged — the block-prefix shift must not apply.
+func TestServer_BlockPrefix_MidLineHeading(t *testing.T) {
+	markdown := "## Section title\n\nSome text.\n"
+	// Anchor starts at "Section" (mid-line, after the '## ' prefix).
+	mdPath := writeCustomFixtures(t, markdown, "Section title", "Section title", "mid-line heading comment")
+
+	body := renderPage(t, mdPath)
+
+	if !strings.Contains(body, "<h2>") {
+		t.Errorf("expected <h2> in rendered HTML; got:\n%s", body)
+	}
+	if !strings.Contains(body, `<mark class="anchor"`) {
+		t.Errorf("expected <mark class=\"anchor\"> in rendered HTML; got:\n%s", body)
+	}
+	// The anchor text must appear inside the mark.
+	if !strings.Contains(body, "Section title") {
+		t.Errorf("anchor text not found in rendered HTML; got:\n%s", body)
+	}
+}
+
+// TestServer_FencedBlock_OpeningFenceAnchor verifies that a comment whose start
+// anchor is the opening fence line of a fenced code block (e.g. "```python")
+// renders as an orphan pin without breaking the code block. Two failure modes
+// existed before the fix:
+//  1. The <mark> was inserted before the backticks, causing goldmark to parse
+//     the fence line as an inline-HTML paragraph.
+//  2. The orphan pin was placed at the opening fence line offset on the same
+//     line as the backticks, so goldmark still saw inline HTML + fence on one
+//     line and broke the block. A trailing newline after the pin is required.
+func TestServer_FencedBlock_OpeningFenceAnchor(t *testing.T) {
+	markdown := "prev paragraph.\n\n```python\nx = 1\n```\n"
+	// Anchor covers the entire opening fence line.
+	mdPath := writeCustomFixtures(t, markdown, "```python", "```python", "fence comment")
+
+	body := renderPage(t, mdPath)
+
+	// The code block must be rendered as a <pre> element. Chroma wraps the
+	// content in <code> inside <pre> and may add inline styles, so we check
+	// for the opening tag only.
+	if !strings.Contains(body, "<pre") {
+		t.Errorf("expected <pre in rendered HTML; got:\n%s", body)
+	}
+	// The code body must be rendered inside the <pre>, not as plaintext prose.
+	// Chroma tokenises the source so "x = 1" won't appear verbatim, but the
+	// variable name "x" will appear as a bare text node. We verify the <pre>
+	// block is present and non-empty by checking for the <code> wrapper that
+	// chroma always emits.
+	if !strings.Contains(body, "<code>") && !strings.Contains(body, "<code ") {
+		t.Errorf("expected <code element inside <pre; got:\n%s", body)
+	}
+	// The backtick fence must not appear as literal plaintext anywhere in the
+	// output. This is the key regression check: if the pin + fence land on the
+	// same line, goldmark emits the backticks verbatim.
+	if strings.Contains(body, "```python") {
+		t.Errorf("fence backticks appear as literal text in rendered HTML; got:\n%s", body)
+	}
+	// The comment must appear as an orphan pin, not a <mark>.
+	if !strings.Contains(body, `class="orphan-pin"`) {
+		t.Errorf("expected orphan-pin span in rendered HTML; got:\n%s", body)
+	}
+	if strings.Contains(body, `<mark class="anchor"`) {
+		t.Errorf("unexpected <mark class=\"anchor\"> for fenced-block anchor; got:\n%s", body)
+	}
+}
+
+// TestServer_FencedBlock_InsideBodyAnchor verifies that a comment whose start
+// anchor is a line inside a fenced code block body also renders as an orphan
+// pin. Previously the bootstrap path silently dropped such comments; after the
+// fix they must appear in the margin.
+func TestServer_FencedBlock_InsideBodyAnchor(t *testing.T) {
+	markdown := "Some text.\n\n```python\nx = 1\nprint(x)\n```\n"
+	// Anchor covers a line inside the fence body.
+	mdPath := writeCustomFixtures(t, markdown, "x = 1", "x = 1", "inside-fence comment")
+
+	body := renderPage(t, mdPath)
+
+	// The code block must still render correctly.
+	if !strings.Contains(body, "<pre>") && !strings.Contains(body, "<code>") {
+		t.Errorf("expected <pre> or <code> in rendered HTML; got:\n%s", body)
+	}
+	// The comment must appear as an orphan pin, not be silently dropped.
+	if !strings.Contains(body, `class="orphan-pin"`) {
+		t.Errorf("expected orphan-pin span for inside-fence anchor; got:\n%s", body)
+	}
+	if strings.Contains(body, `<mark class="anchor"`) {
+		t.Errorf("unexpected <mark class=\"anchor\"> for inside-fence anchor; got:\n%s", body)
+	}
+}
+
 // TestServer_WatchBroadcastsReloadOnFileChange verifies that modifying the
 // markdown file causes Watch to call Reload and broadcast a "reload" SSE event
 // to subscribers within a reasonable time window.
