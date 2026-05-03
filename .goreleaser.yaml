@@ -1,0 +1,54 @@
+version: 2
+
+builds:
+  - id: graphe
+    main: ./cmd/graphe
+    binary: graphe
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+homebrew_casks:
+  - name: graphe
+    homepage: https://github.com/skorokithakis/graphe
+    description: Serve a markdown file as a Tufte-style web page with reviewer comments as margin notes.
+    binaries:
+      - graphe
+    # Remove the quarantine bit so macOS doesn't block an unsigned binary.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/graphe"]
+          end
+    repository:
+      # Requires a HOMEBREW_TAP_GITHUB_TOKEN secret in the graphe repo with
+      # write access to the tap repo.
+      owner: skorokithakis
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
+changelog:
+  # release-please owns the changelog and release notes; goreleaser must not
+  # generate its own or it will overwrite what release-please wrote.
+  disable: true
+
+release:
+  # release-please already creates the GitHub release before this job runs,
+  # so goreleaser must append artifacts rather than try to create a new release.
+  mode: append

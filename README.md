@@ -13,6 +13,18 @@ whenever the post or its comments change.
 
 ## Install
 
+### Homebrew (macOS, Linux)
+
+```sh
+brew install skorokithakis/tap/graphe
+```
+
+### Pre-built binary
+
+Download the archive for your OS/arch from the [latest release](https://github.com/skorokithakis/graphe/releases/latest), extract, and put `graphe` on your `PATH`.
+
+### From source
+
 ```sh
 go install github.com/skorokithakis/graphe/cmd/graphe@latest
 ```
