@@ -179,7 +179,7 @@ func TestServer_ReloadUpdatesContent(t *testing.T) {
 	}
 }
 
-func TestServer_NotFoundForUnknownPath(t *testing.T) {
+func TestServer_RedirectsUnknownPathToRoot(t *testing.T) {
 	mdPath := writeFixtures(t)
 
 	srv, err := server.New(mdPath)
@@ -191,8 +191,11 @@ func TestServer_NotFoundForUnknownPath(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
 	srv.Handler().ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNotFound {
-		t.Errorf("GET /nonexistent returned %d, want 404", recorder.Code)
+	if recorder.Code != http.StatusFound {
+		t.Errorf("GET /nonexistent returned %d, want 302", recorder.Code)
+	}
+	if location := recorder.Header().Get("Location"); location != "/" {
+		t.Errorf("GET /nonexistent Location header = %q, want %q", location, "/")
 	}
 }
 

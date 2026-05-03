@@ -333,7 +333,14 @@ func (s *Server) handleDeleteComment(writer http.ResponseWriter, request *http.R
 
 func (s *Server) handleIndex(writer http.ResponseWriter, request *http.Request) {
 	if request.URL.Path != "/" {
-		http.NotFound(writer, request)
+		// Catch-all GET handler: any path that did not match a more specific
+		// route (e.g. /events, /comments/{id}) lands here. Redirect to / so
+		// stray links and typos always end up on the post rather than a 404.
+		// Only GETs reach this branch because the route is registered as
+		// "GET /"; non-GET methods to unknown paths still get the mux's
+		// default 404/405. The page itself inlines its CSS/JS and references
+		// no external assets, so this redirect cannot loop on its own.
+		http.Redirect(writer, request, "/", http.StatusFound)
 		return
 	}
 
