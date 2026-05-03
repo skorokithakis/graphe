@@ -148,6 +148,9 @@ header {
 /* Anchor highlights in the post body. */
 mark.anchor {
   background: var(--anchor-bg);
+  /* Override the UA default color (black) so highlighted text stays
+     readable in dark mode against the dimmed amber background. */
+  color: inherit;
   border-radius: 2px;
   padding: 0 1px;
   cursor: default;
@@ -171,7 +174,12 @@ mark.anchor.active {
   padding: 0.6rem 0.75rem;
   font-size: 0.82rem;
   line-height: 1.45;
-  transform: rotate(-0.5deg);
+  /* A pronounced tilt reads as deliberate. A subtle one (e.g. -0.5deg) reads
+     as misalignment, especially when consecutive post-its have different
+     heights. The origin is the top-left so the inner edges of all post-its
+     start at the same x. */
+  transform: rotate(-1.5deg);
+  transform-origin: top left;
   transition: box-shadow 0.15s, background 0.15s, top 0.2s ease-out;
 }
 
