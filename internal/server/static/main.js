@@ -1,13 +1,19 @@
 // Positions each post-it note vertically to align with its anchor in the text,
 // then resolves overlaps by pushing later notes downward.
 //
-// This runs once on DOMContentLoaded. The margin column uses position:relative
-// so each post-it's `top` is relative to the column's top edge, which in turn
-// is aligned with the start of the post body via CSS grid row alignment.
+// On narrow viewports the post-its are instead moved inline, immediately after
+// the block that contains their anchor, so they read like inline footnotes.
+// arrangePostits() handles the move; positionPostits() handles desktop layout.
 (function () {
   "use strict";
 
   var GAP_PX = 8; // minimum vertical gap between adjacent post-its
+  var MOBILE_QUERY = "(max-width: 700px)";
+
+  // Selectors of block-level elements we consider "the block containing the
+  // anchor" for inline placement. We prefer the closest ancestor in this list.
+  var BLOCK_SELECTOR =
+    "p, pre, blockquote, ul, ol, li, h1, h2, h3, h4, h5, h6, table";
 
   function positionPostits() {
     var marginColumn = document.querySelector(".margin-column");
@@ -18,7 +24,7 @@
 
     var columnTop = marginColumn.getBoundingClientRect().top + window.scrollY;
 
-    var postits = Array.from(document.querySelectorAll(".postit"));
+    var postits = Array.from(marginColumn.querySelectorAll(".postit"));
 
     // Build a list of {postit, desiredTop} sorted by desiredTop ascending.
     var entries = postits
@@ -45,6 +51,58 @@
       var top = Math.max(entry.desiredTop, nextAvailableTop);
       entry.postit.style.top = top + "px";
       nextAvailableTop = top + entry.postit.offsetHeight + GAP_PX;
+    });
+  }
+
+  // Move each post-it to its viewport-appropriate location: inline-after-block
+  // on narrow viewports, back into the margin column on wide ones. The post-it
+  // is moved (not cloned) so event handlers and `<details>` open state survive
+  // the relocation.
+  function arrangePostits() {
+    var marginColumn = document.querySelector(".margin-column");
+    if (!marginColumn) return;
+
+    var isMobile = window.matchMedia(MOBILE_QUERY).matches;
+    var postits = Array.from(document.querySelectorAll(".postit"));
+
+    if (!isMobile) {
+      // Desktop: ensure all post-its live in the margin column. The original
+      // server-rendered order is preserved by appendChild's natural ordering
+      // among already-attached children; freshly returning ones go to the end.
+      postits.forEach(function (postit) {
+        if (postit.parentElement !== marginColumn) {
+          marginColumn.appendChild(postit);
+        }
+      });
+      positionPostits();
+      return;
+    }
+
+    // Mobile: move each post-it to immediately after its anchor's block.
+    postits.forEach(function (postit) {
+      var id = postit.dataset.commentId;
+      var anchor = document.querySelector(
+        'mark.anchor[data-comment-id="' + id + '"]'
+      );
+      if (!anchor) return; // leave it in margin column as a fallback.
+
+      var block = anchor.closest(BLOCK_SELECTOR);
+      if (!block) return;
+
+      // If multiple comments anchor in the same block, the inserts would
+      // otherwise reverse their order. Walk past any post-its already attached
+      // after this block so we land at the end of that run.
+      var insertAfter = block;
+      while (
+        insertAfter.nextElementSibling &&
+        insertAfter.nextElementSibling.classList.contains("postit")
+      ) {
+        insertAfter = insertAfter.nextElementSibling;
+      }
+      insertAfter.parentNode.insertBefore(postit, insertAfter.nextSibling);
+
+      // Drop any stale `top` set by an earlier desktop layout.
+      postit.style.top = "";
     });
   }
 
@@ -88,8 +146,12 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    positionPostits();
+    arrangePostits();
     wireHover();
     connectSSE();
+
+    // Re-arrange when the breakpoint is crossed (e.g. device rotation,
+    // window resize). Using matchMedia avoids re-running on every resize tick.
+    window.matchMedia(MOBILE_QUERY).addEventListener("change", arrangePostits);
   });
 })();

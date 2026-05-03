@@ -16,10 +16,10 @@
     </article>
     <aside class="margin-column">
       {{range .Comments}}
-      <div class="postit" data-comment-id="{{.ID}}">
-        <div class="postit-id">{{.ID}}</div>
+      <details class="postit" data-comment-id="{{.ID}}" open>
+        <summary class="postit-id">{{.ID}}</summary>
         <div class="postit-body">{{.Body}}</div>
-      </div>
+      </details>
       {{end}}
     </aside>
   </div>

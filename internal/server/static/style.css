@@ -64,11 +64,19 @@ header {
   /* The JS snippet positions each post-it absolutely within this column. */
 }
 
+/* On narrow viewports the JS relocates each post-it to immediately after the
+   block containing its anchor, so the dedicated margin column collapses to
+   nothing. We keep it in the layout for any post-it whose anchor we couldn't
+   find (e.g. the comment was added but the source has since changed). */
 @media (max-width: 700px) {
   .margin-column {
     grid-column: 1;
     grid-row: 3;
     position: static;
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .margin-column:not(:empty) {
     margin-top: 2rem;
     border-top: 1px solid #ddd;
     padding-top: 1rem;
@@ -115,17 +123,54 @@ mark.anchor.active {
 @media (max-width: 700px) {
   .postit {
     position: static;
-    width: 100%;
-    margin-bottom: 1rem;
+    width: auto;
+    max-width: var(--main-width);
+    margin: 1rem 0;
     transform: none;
   }
 }
 
+/* The summary doubles as the comment-id label and the click target for
+   collapsing. We hide the browser's default disclosure marker and add a
+   subtle ▾/▸ indicator on the right so the affordance is discoverable
+   without dominating the visual. */
 .postit-id {
   font-size: 0.7rem;
   color: #888;
-  margin-bottom: 0.3rem;
   font-family: var(--code-font);
+  margin-bottom: 0.3rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.postit-id::-webkit-details-marker {
+  display: none;
+}
+
+.postit[open] > .postit-id::after {
+  content: "\25BE"; /* ▾ */
+  opacity: 0.5;
+  margin-left: 0.5rem;
+}
+
+.postit:not([open]) > .postit-id::after {
+  content: "\25B8"; /* ▸ */
+  opacity: 0.5;
+  margin-left: 0.5rem;
+}
+
+.postit:not([open]) {
+  /* Collapsed state: tighten padding so a row of collapsed comments doesn't
+     waste vertical space. */
+  padding: 0.35rem 0.75rem;
+}
+
+.postit:not([open]) > .postit-id {
+  margin-bottom: 0;
 }
 
 .postit-body p:first-child {
