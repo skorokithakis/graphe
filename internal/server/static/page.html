@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <style>{{.CSS}}</style>
+</head>
+<body>
+  <div class="layout">
+    <header>
+      <h1>{{.Title}}</h1>
+    </header>
+    <article class="post-body">
+      {{.HTML}}
+    </article>
+    <aside class="margin-column">
+      {{range .Comments}}
+      <div class="postit" data-comment-id="{{.ID}}">
+        <div class="postit-id">{{.ID}}</div>
+        <div class="postit-body">{{.Body}}</div>
+      </div>
+      {{end}}
+    </aside>
+  </div>
+  <script>{{.JS}}</script>
+</body>
+</html>

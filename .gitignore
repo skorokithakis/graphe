@@ -1,0 +1,8 @@
+# Compiled binaries.
+/graphe
+
+# Local ticket tracker state — not part of the public source.
+/.tickets/
+
+# jj working state when colocated.
+/.jj/

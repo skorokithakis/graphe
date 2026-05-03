@@ -1,0 +1,175 @@
+:root {
+  --anchor-bg: #fffbcc;
+  --anchor-bg-hover: #fff099;
+  --postit-bg: #fffbcc;
+  --postit-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  --postit-border: 1px solid #e8d84a;
+  --main-width: 55ch;
+  --margin-width: 30ch;
+  --gap: 2rem;
+  --body-font: Georgia, "Times New Roman", serif;
+  --code-font: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1rem;
+  font-family: var(--body-font);
+  color: #222;
+  background: #fff;
+}
+
+/* Two-column grid: main text + margin notes.
+   On narrow viewports the grid collapses to a single column and margin notes
+   stack below the article. */
+.layout {
+  display: grid;
+  grid-template-columns: var(--main-width) var(--margin-width);
+  grid-template-rows: auto 1fr;
+  column-gap: var(--gap);
+  max-width: calc(var(--main-width) + var(--gap) + var(--margin-width));
+  margin: 0 auto;
+}
+
+@media (max-width: 700px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+header {
+  grid-column: 1;
+}
+
+.post-body {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.margin-column {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  /* The JS snippet positions each post-it absolutely within this column. */
+}
+
+@media (max-width: 700px) {
+  .margin-column {
+    grid-column: 1;
+    grid-row: 3;
+    position: static;
+    margin-top: 2rem;
+    border-top: 1px solid #ddd;
+    padding-top: 1rem;
+  }
+}
+
+/* Anchor highlights in the post body. */
+mark.anchor {
+  background: var(--anchor-bg);
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+mark.anchor:hover,
+mark.anchor.active {
+  background: var(--anchor-bg-hover);
+}
+
+/* Post-it margin notes. */
+.postit {
+  position: absolute;
+  left: 0;
+  width: calc(var(--margin-width) - 0.5rem);
+  background: var(--postit-bg);
+  border: var(--postit-border);
+  box-shadow: var(--postit-shadow);
+  border-radius: 3px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  transform: rotate(-0.5deg);
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.postit:hover,
+.postit.active {
+  background: var(--anchor-bg-hover);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+/* On narrow viewports the post-its are static, not absolutely positioned. */
+@media (max-width: 700px) {
+  .postit {
+    position: static;
+    width: 100%;
+    margin-bottom: 1rem;
+    transform: none;
+  }
+}
+
+.postit-id {
+  font-size: 0.7rem;
+  color: #888;
+  margin-bottom: 0.3rem;
+  font-family: var(--code-font);
+}
+
+.postit-body p:first-child {
+  margin-top: 0;
+}
+
+.postit-body p:last-child {
+  margin-bottom: 0;
+}
+
+/* Typography. */
+h1,
+h2,
+h3,
+h4 {
+  font-weight: normal;
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: 2rem;
+  margin-bottom: 0.25rem;
+}
+
+p {
+  margin: 1em 0;
+}
+
+pre {
+  overflow-x: auto;
+  font-size: 0.85rem;
+  padding: 1rem;
+  border-radius: 4px;
+  background: #f6f8fa;
+}
+
+code {
+  font-family: var(--code-font);
+  font-size: 0.88em;
+}
+
+blockquote {
+  border-left: 3px solid #ccc;
+  margin-left: 0;
+  padding-left: 1rem;
+  color: #555;
+}

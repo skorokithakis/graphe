@@ -1,0 +1,18 @@
+{
+  "comments": [
+    {
+      "id": "c-76wr",
+      "start": "anchor must appear exactly once",
+      "end": "without modifying the file itself",
+      "body": "Good explanation of the uniqueness constraint.",
+      "created_at": "2026-05-03T11:41:23Z"
+    },
+    {
+      "id": "c-zg7j",
+      "start": "keeps the markdown source clean",
+      "end": "changes only slightly",
+      "body": "Consider elaborating on what 'slightly' means in practice.",
+      "created_at": "2026-05-03T11:41:25Z"
+    }
+  ]
+}
