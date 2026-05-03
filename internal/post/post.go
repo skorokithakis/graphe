@@ -47,53 +47,84 @@ var (
 	h1Pattern = regexp.MustCompile(`(?m)^#\s+(.+)$`)
 )
 
+// utf8BOM is the byte sequence that some editors prepend to UTF-8 files.
+// We strip it before frontmatter detection so the leading delimiter line
+// is recognised regardless.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
 // stripFrontmatter removes leading YAML (--- delimited) or TOML (+++ delimited)
-// frontmatter from content and returns the extracted fields plus the remaining body.
-// If no frontmatter is found, body is the original content unchanged.
+// frontmatter and returns the extracted fields plus the remaining body. If no
+// frontmatter is found, body is the original content unchanged.
+//
+// Detection is line-based to tolerate CRLF line endings, a leading UTF-8 BOM,
+// and trailing whitespace on the delimiter lines. The closing delimiter may
+// appear at end-of-file with no trailing newline.
+//
+// Byte-fidelity contract: the returned body slice is taken verbatim from the
+// content after the closing delimiter line. Comment anchors are matched as
+// literal substrings against this slice, so no normalisation is performed.
 func stripFrontmatter(content []byte) frontmatterResult {
-	delimiter, rest := detectFrontmatter(content)
-	if delimiter == "" {
+	content = bytes.TrimPrefix(content, utf8BOM)
+
+	firstLineEnd := bytes.IndexByte(content, '\n')
+	if firstLineEnd == -1 {
 		return frontmatterResult{body: content}
 	}
 
-	// Find the closing delimiter.
-	closing := []byte("\n" + delimiter + "\n")
-	index := bytes.Index(rest, closing)
-	if index == -1 {
-		// Closing delimiter not found; treat the whole file as body.
-		return frontmatterResult{body: content}
+	switch trimmedLine(content[:firstLineEnd]) {
+	case "---":
+		return parseFrontmatter(content, firstLineEnd+1, "---")
+	case "+++":
+		return parseFrontmatter(content, firstLineEnd+1, "+++")
 	}
-
-	header := rest[:index]
-	// body starts after the closing delimiter line (skip the leading newline too).
-	body := rest[index+len(closing):]
-
-	result := frontmatterResult{body: body}
-
-	// Only attempt title extraction for YAML frontmatter.
-	if delimiter == "---" {
-		if match := yamlTitlePattern.FindSubmatch(header); match != nil {
-			// Strip optional surrounding quotes that some authors add.
-			title := strings.TrimSpace(string(match[1]))
-			title = strings.Trim(title, `"'`)
-			result.title = title
-		}
-	}
-
-	return result
+	return frontmatterResult{body: content}
 }
 
-// detectFrontmatter checks whether content starts with a known frontmatter
-// delimiter and returns the delimiter string and the content after the opening
-// delimiter line. Returns ("", nil) when no frontmatter is present.
-func detectFrontmatter(content []byte) (delimiter string, rest []byte) {
-	for _, delim := range []string{"---", "+++"} {
-		prefix := []byte(delim + "\n")
-		if bytes.HasPrefix(content, prefix) {
-			return delim, content[len(prefix):]
+// parseFrontmatter walks lines starting at headerStart, looking for a closing
+// line that matches delimiter (after trimming). It returns the body slice
+// (everything after the closing delimiter line) and the extracted title for
+// YAML frontmatter. If no closing delimiter is found, the whole content is
+// treated as body — i.e. we do not silently swallow content that only looks
+// like frontmatter.
+func parseFrontmatter(content []byte, headerStart int, delimiter string) frontmatterResult {
+	pos := headerStart
+	for pos < len(content) {
+		lineEnd := bytes.IndexByte(content[pos:], '\n')
+		var line []byte
+		var nextPos int
+		if lineEnd == -1 {
+			line = content[pos:]
+			nextPos = len(content)
+		} else {
+			line = content[pos : pos+lineEnd]
+			nextPos = pos + lineEnd + 1
 		}
+
+		if trimmedLine(line) == delimiter {
+			header := content[headerStart:pos]
+			body := content[nextPos:]
+			result := frontmatterResult{body: body}
+			if delimiter == "---" {
+				if match := yamlTitlePattern.FindSubmatch(header); match != nil {
+					title := strings.TrimSpace(string(match[1]))
+					title = strings.Trim(title, `"'`)
+					result.title = title
+				}
+			}
+			return result
+		}
+
+		pos = nextPos
 	}
-	return "", nil
+
+	// Closing delimiter not found; the file just looked like it had frontmatter.
+	return frontmatterResult{body: content}
+}
+
+// trimmedLine strips a trailing CR (for CRLF files) and surrounding whitespace
+// so the delimiter comparison tolerates editor quirks.
+func trimmedLine(line []byte) string {
+	return strings.TrimSpace(strings.TrimSuffix(string(line), "\r"))
 }
 
 // markdownRenderer is a shared goldmark instance configured with GFM extensions

@@ -164,3 +164,64 @@ func TestLoad_TOMLFrontmatterStripped(t *testing.T) {
 		t.Errorf("Title = %q, want %q", p.Title, "Body")
 	}
 }
+
+// These cases were silently broken before: the original byte-pattern stripper
+// only recognised the literal "---\n...\n---\n" form, so any of the variations
+// below caused the frontmatter to render as content.
+func TestLoad_FrontmatterCRLF(t *testing.T) {
+	content := "---\r\ntitle: CRLF Post\r\n---\r\n# Body\r\n"
+	path := writeTempFile(t, "crlf.md", content)
+
+	p, err := post.Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if p.Source != "# Body\r\n" {
+		t.Errorf("Source = %q, want %q", p.Source, "# Body\r\n")
+	}
+	if p.Title != "CRLF Post" {
+		t.Errorf("Title = %q, want %q", p.Title, "CRLF Post")
+	}
+}
+
+func TestLoad_FrontmatterWithBOM(t *testing.T) {
+	content := "\xEF\xBB\xBF---\ntitle: BOM Post\n---\n# Body\n"
+	path := writeTempFile(t, "bom.md", content)
+
+	p, err := post.Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if p.Source != "# Body\n" {
+		t.Errorf("Source = %q, want %q", p.Source, "# Body\n")
+	}
+}
+
+func TestLoad_FrontmatterTrailingWhitespace(t *testing.T) {
+	content := "---  \ntitle: Trailing Space\n---\t\n# Body\n"
+	path := writeTempFile(t, "trailing.md", content)
+
+	p, err := post.Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if p.Source != "# Body\n" {
+		t.Errorf("Source = %q, want %q", p.Source, "# Body\n")
+	}
+}
+
+func TestLoad_FrontmatterClosingAtEOF(t *testing.T) {
+	content := "---\ntitle: No Body\n---"
+	path := writeTempFile(t, "eof.md", content)
+
+	p, err := post.Load(path)
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if p.Source != "" {
+		t.Errorf("Source = %q, want empty", p.Source)
+	}
+	if p.Title != "No Body" {
+		t.Errorf("Title = %q, want %q", p.Title, "No Body")
+	}
+}
