@@ -9,6 +9,9 @@
 
   var GAP_PX = 8; // minimum vertical gap between adjacent post-its
   var MOBILE_QUERY = "(max-width: 700px)";
+  // Matches the CSS breakpoint where --margin-width grows. Crossing it
+  // reflows post-it text, so cached top values go stale and need recomputing.
+  var WIDE_QUERY = "(min-width: 1100px)";
 
   // Selectors of block-level elements we consider "the block containing the
   // anchor" for inline placement. We prefer the closest ancestor in this list.
@@ -145,13 +148,27 @@
     });
   }
 
+  // Re-run desktop layout when a post-it expands or collapses, so neighbours
+  // float up to fill the gap (or get pushed down to make room). The `toggle`
+  // event does not bubble, so we attach a listener to each <details> directly.
+  // Post-its are moved (not recreated) between margin column and inline
+  // positions on viewport changes, so wiring once at load is enough.
+  // positionPostits() early-returns on mobile, so the handler is a no-op there.
+  function wireToggleReposition() {
+    document.querySelectorAll(".postit").forEach(function (postit) {
+      postit.addEventListener("toggle", positionPostits);
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     arrangePostits();
     wireHover();
+    wireToggleReposition();
     connectSSE();
 
     // Re-arrange when the breakpoint is crossed (e.g. device rotation,
     // window resize). Using matchMedia avoids re-running on every resize tick.
     window.matchMedia(MOBILE_QUERY).addEventListener("change", arrangePostits);
+    window.matchMedia(WIDE_QUERY).addEventListener("change", positionPostits);
   });
 })();

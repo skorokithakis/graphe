@@ -53,6 +53,15 @@ body {
   }
 }
 
+/* On wide screens there's room to spare beyond the layout's max-width, so
+   give the margin column more breathing room. Main width is unchanged so
+   prose line length stays in the comfortable range. */
+@media (min-width: 1100px) {
+  :root {
+    --margin-width: 40ch;
+  }
+}
+
 header {
   grid-column: 1;
 }
@@ -115,7 +124,7 @@ mark.anchor.active {
   font-size: 0.82rem;
   line-height: 1.45;
   transform: rotate(-0.5deg);
-  transition: box-shadow 0.15s, background 0.15s;
+  transition: box-shadow 0.15s, background 0.15s, top 0.2s ease-out;
 }
 
 .postit:hover,
