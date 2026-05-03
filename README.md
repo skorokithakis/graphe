@@ -1,6 +1,6 @@
 # graphe
 
-> *γραφή*
+> [*γραφή*], writing
 
 Render a markdown post in the browser with margin-note review comments,
 designed for human-LLM collaborative prose review.
