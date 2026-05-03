@@ -216,6 +216,11 @@ type anchorSpan struct {
 func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment) (template.HTML, []renderedComment, error) {
 	source := loadedPost.Source
 
+	// Build a set of line-start byte offsets that fall inside fenced code blocks
+	// so we can skip anchors that land there. A simple state machine is sufficient
+	// because we only need to match what goldmark sees, not parse full markdown.
+	fencedLineOffsets := fencedCodeBlockLineOffsets(source)
+
 	// Resolve byte offsets for each comment, skipping any that are ambiguous or
 	// missing (which can happen if the post was edited after the comment was added).
 	var spans []anchorSpan
@@ -225,7 +230,7 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment) (templ
 			log.Printf("comment %s: start anchor %q not found in source, skipping", comment.ID, comment.Start)
 			continue
 		}
-		if strings.Count(source, comment.Start) > 1 {
+		if countOverlappingOccurrences(source, comment.Start) > 1 {
 			log.Printf("comment %s: start anchor %q is ambiguous, skipping", comment.ID, comment.Start)
 			continue
 		}
@@ -235,8 +240,13 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment) (templ
 			log.Printf("comment %s: end anchor %q not found in source, skipping", comment.ID, comment.End)
 			continue
 		}
-		if strings.Count(source, comment.End) > 1 {
+		if countOverlappingOccurrences(source, comment.End) > 1 {
 			log.Printf("comment %s: end anchor %q is ambiguous, skipping", comment.ID, comment.End)
+			continue
+		}
+
+		if fencedLineOffsets[lineStartOffset(source, startIndex)] {
+			log.Printf("comment %s: anchors inside a code block, skipping", comment.ID)
 			continue
 		}
 
@@ -246,6 +256,27 @@ func buildAnnotatedPage(loadedPost *post.Post, comments []review.Comment) (templ
 			endIndex:   endIndex,
 		})
 	}
+
+	// Sort by startIndex ascending to detect overlapping spans before we reverse
+	// the order for insertion.
+	sort.Slice(spans, func(i, j int) bool {
+		return spans[i].startIndex < spans[j].startIndex
+	})
+
+	// Drop any span that starts before the previous span's end. Overlapping
+	// <mark> tags produce invalid HTML and confuse the JS positioning logic.
+	filtered := spans[:0]
+	previousEnd := -1
+	for _, span := range spans {
+		spanEnd := span.endIndex + len(span.comment.End)
+		if span.startIndex < previousEnd {
+			log.Printf("comment %s overlaps an earlier comment, skipping", span.comment.ID)
+			continue
+		}
+		filtered = append(filtered, span)
+		previousEnd = spanEnd
+	}
+	spans = filtered
 
 	// Sort by startIndex descending so that inserting markers at later offsets
 	// first does not shift the byte positions of earlier markers.
@@ -320,4 +351,56 @@ func insertBytes(data []byte, position int, insertion []byte) []byte {
 	copy(result[position:], insertion)
 	copy(result[position+len(insertion):], data[position:])
 	return result
+}
+
+// countOverlappingOccurrences counts how many times sub appears in s, including
+// overlapping occurrences. strings.Count only counts non-overlapping matches,
+// so "aa" in "aaa" returns 1 there but 2 here.
+func countOverlappingOccurrences(s, sub string) int {
+	if sub == "" {
+		return 0
+	}
+	count := 0
+	start := 0
+	for {
+		index := strings.Index(s[start:], sub)
+		if index == -1 {
+			break
+		}
+		count++
+		start += index + 1
+	}
+	return count
+}
+
+// fencedCodeBlockLineOffsets returns a set of byte offsets (one per line) that
+// fall inside a fenced code block in the markdown source. A simple state machine
+// is used: lines starting with ``` or ~~~ toggle the fence state. This matches
+// what goldmark sees without attempting full markdown parsing.
+func fencedCodeBlockLineOffsets(source string) map[int]bool {
+	offsets := map[int]bool{}
+	inFence := false
+	lineOffset := 0
+	for _, line := range strings.Split(source, "\n") {
+		trimmed := strings.TrimLeft(line, " \t")
+		isFenceMarker := strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")
+		if isFenceMarker {
+			inFence = !inFence
+		} else if inFence {
+			offsets[lineOffset] = true
+		}
+		// +1 for the newline that Split consumed.
+		lineOffset += len(line) + 1
+	}
+	return offsets
+}
+
+// lineStartOffset returns the byte offset of the start of the line that
+// contains the byte at position within source.
+func lineStartOffset(source string, position int) int {
+	lastNewline := strings.LastIndex(source[:position], "\n")
+	if lastNewline == -1 {
+		return 0
+	}
+	return lastNewline + 1
 }

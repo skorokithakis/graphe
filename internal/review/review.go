@@ -182,9 +182,9 @@ func (s *Store) List() []Comment {
 }
 
 // validateAnchors checks that start and end each appear exactly once in source
-// and that start does not appear after end.
+// and that the end anchor does not fall inside the start anchor's span.
 func validateAnchors(start, end, source string) error {
-	startCount := strings.Count(source, start)
+	startCount := countOverlapping(source, start)
 	switch {
 	case startCount == 0:
 		return errors.New("start anchor not found in document")
@@ -192,7 +192,7 @@ func validateAnchors(start, end, source string) error {
 		return fmt.Errorf("start anchor matches %d places, make it more specific", startCount)
 	}
 
-	endCount := strings.Count(source, end)
+	endCount := countOverlapping(source, end)
 	switch {
 	case endCount == 0:
 		return errors.New("end anchor not found in document")
@@ -203,11 +203,40 @@ func validateAnchors(start, end, source string) error {
 	startIndex := strings.Index(source, start)
 	endIndex := strings.Index(source, end)
 
-	if endIndex+len(end) <= startIndex {
-		return errors.New("end anchor appears before start anchor")
+	if start == end {
+		// Same anchor for both sides: the span is exactly that single match, which
+		// is always valid.
+		return nil
+	}
+
+	// Require the end anchor to begin at or after the end of the start anchor so
+	// that the end cannot fall inside the start (e.g. start="The quick brown fox",
+	// end="quick" would otherwise pass the old endIndex+len(end) <= startIndex check).
+	if endIndex < startIndex+len(start) {
+		return errors.New("end anchor appears before or inside start anchor")
 	}
 
 	return nil
+}
+
+// countOverlapping counts how many times sub appears in s, including overlapping
+// occurrences. strings.Count only counts non-overlapping matches, so "aa" in
+// "aaa" returns 1 there but 2 here.
+func countOverlapping(s, sub string) int {
+	if sub == "" {
+		return 0
+	}
+	count := 0
+	start := 0
+	for {
+		index := strings.Index(s[start:], sub)
+		if index == -1 {
+			break
+		}
+		count++
+		start += index + 1
+	}
+	return count
 }
 
 // generateID produces a unique "c-" + 4 lowercase alphanumeric ID, retrying on

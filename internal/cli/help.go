@@ -115,7 +115,7 @@ From the LLM's point of view:
 HOW COMMENTS ANCHOR TO TEXT
 
 Each comment is anchored by two substrings of the post body (the markdown
-source after the YAML frontmatter is stripped):
+source after the YAML (---) or TOML (+++) frontmatter is stripped):
 
   --start   A substring that marks the beginning of the highlighted passage.
   --end     A substring that marks the end of the highlighted passage.
@@ -145,6 +145,10 @@ A comment on just the second sentence:
 The anchor text is matched literally (case-sensitive, whitespace-sensitive).
 Do not include markdown formatting characters in the anchor unless they appear
 verbatim in the source.
+
+Do not anchor inside fenced code blocks (triple-backtick or triple-tilde
+fences): the highlight will not render because goldmark HTML-escapes the
+inserted <mark> tag.
 
 
 COMMAND REFERENCE

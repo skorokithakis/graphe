@@ -187,6 +187,28 @@ func TestDelete_UnknownIDReturnsError(t *testing.T) {
 	}
 }
 
+func TestAdd_EndInsideStartReturnsError(t *testing.T) {
+	store := loadEmpty(t)
+
+	// "quick" falls inside "quick brown fox", so end is inside start.
+	_, err := store.Add("quick brown fox", "quick", "body", source)
+	if err == nil {
+		t.Fatal("expected error when end anchor falls inside start anchor, got nil")
+	}
+}
+
+func TestAdd_OverlappingAnchorCountedCorrectly(t *testing.T) {
+	store := loadEmpty(t)
+
+	// "aa" appears twice in "aaa" (overlapping), so it must be rejected as
+	// ambiguous even though strings.Count would return 1.
+	overlappingSource := "aaa bbb ccc"
+	_, err := store.Add("aa", "bbb", "body", overlappingSource)
+	if err == nil {
+		t.Fatal("expected error for overlapping start anchor, got nil")
+	}
+}
+
 func TestSidecarPath_DerivedCorrectly(t *testing.T) {
 	dir := t.TempDir()
 	mdPath := filepath.Join(dir, "my-post.md")

@@ -40,6 +40,17 @@ highlighted span. Resolve a comment by deleting it:
 graphe comment delete post.md c-a1b2
 ```
 
+### Other commands
+
+- **List** all comments with their IDs and anchors:
+  ```sh
+  graphe comment list post.md
+  ```
+- **Edit** an existing comment (any combination of `--start`, `--end`, `--body`):
+  ```sh
+  graphe comment edit post.md c-a1b2 --body "Revised suggestion."
+  ```
+
 ## Use with an LLM
 
 Point the LLM at the file and ask it to review. The single command it needs
