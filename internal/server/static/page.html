@@ -29,8 +29,6 @@
           {{if .Orphaned}}<span class="orphan-badge">orphaned</span>{{end}}
           <span class="postit-id-text">{{.ID}}</span>
           <span class="postit-controls">
-            <button class="postit-nav postit-nav-up" title="Previous comment" aria-label="Previous comment">▲</button>
-            <button class="postit-nav postit-nav-down" title="Next comment" aria-label="Next comment">▼</button>
             <button class="postit-close" title="Delete comment" aria-label="Delete comment">✕</button>
           </span>
         </summary>
@@ -40,6 +38,10 @@
     </aside>
   </div>
   <button class="theme-toggle" aria-label="Theme: auto">◐</button>
+  <div class="page-nav">
+    <button class="page-nav-up" title="Previous comment" aria-label="Previous comment">▲</button>
+    <button class="page-nav-down" title="Next comment" aria-label="Next comment">▼</button>
+  </div>
   <script>{{.JS}}</script>
 </body>
 </html>

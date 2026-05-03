@@ -144,7 +144,7 @@
       nextAvailableTop = top + entry.postit.offsetHeight + GAP_PX;
     });
 
-    updateNavChevrons();
+    updatePageNav();
   }
 
   // Move each post-it to its viewport-appropriate location: inline-after-block
@@ -196,7 +196,7 @@
       postit.style.top = "";
     });
 
-    updateNavChevrons();
+    updatePageNav();
   }
 
   // Wire up hover cross-highlighting between anchors and their post-its.
@@ -281,57 +281,89 @@
     });
   }
 
-  // updateNavChevrons hides the ▲ button on the first post-it in DOM order and
-  // the ▼ button on the last. Called after every layout pass because post-its
-  // move between the margin column and inline positions on viewport changes.
-  function updateNavChevrons() {
+  // findNavTarget returns the post-it that a ▲ or ▼ click should scroll to,
+  // or null if there is no target in that direction. The 1px epsilon prevents
+  // sub-pixel rounding after a smooth scroll from leaving the just-landed
+  // post-it as an immediate ▲ target.
+  function findNavTarget(direction) {
+    var referenceLine = window.innerHeight * 0.2;
     var postits = Array.from(document.querySelectorAll(".postit"));
-    postits.forEach(function (postit, index) {
-      var upButton = postit.querySelector(".postit-nav-up");
-      var downButton = postit.querySelector(".postit-nav-down");
-      if (upButton) {
-        upButton.style.visibility = index === 0 ? "hidden" : "";
-      }
-      if (downButton) {
-        downButton.style.visibility =
-          index === postits.length - 1 ? "hidden" : "";
-      }
+    if (direction === "down") {
+      return postits.find(function (postit) {
+        return postit.getBoundingClientRect().top > referenceLine + 1;
+      }) || null;
+    }
+    // direction === "up": last post-it whose top edge is above the line.
+    for (var i = postits.length - 1; i >= 0; i--) {
+      if (postits[i].getBoundingClientRect().top < referenceLine - 1) return postits[i];
+    }
+    return null;
+  }
+
+  // scrollPostitToReferenceLine scrolls so the given post-it's top edge lands
+  // on the 20% reference line.
+  function scrollPostitToReferenceLine(postit) {
+    var referenceLine = window.innerHeight * 0.2;
+    var rect = postit.getBoundingClientRect();
+    window.scrollTo({
+      top: rect.top + window.scrollY - referenceLine,
+      behavior: "smooth",
     });
   }
 
-  // Wire up the ▲/▼ navigation buttons. Each button scrolls the adjacent
-  // post-it into view using smooth scrolling. DOM order is used because it
-  // matches reading order on both desktop (margin column, top-to-bottom) and
-  // mobile (inline, following the text flow).
-  function wireNavChevrons() {
-    document.querySelectorAll(".postit-nav").forEach(function (button) {
-      button.addEventListener("click", function (event) {
-        // Prevent the click from toggling the parent <details> element.
-        event.stopPropagation();
-        event.preventDefault();
+  // updatePageNav refreshes the disabled state of the ▲/▼ buttons and toggles
+  // .empty on the container when there are no post-its. Called at the end of
+  // each layout pass (positionPostits, arrangePostits) and by the scroll and
+  // resize listeners wired in wirePageNav.
+  function updatePageNav() {
+    var container = document.querySelector(".page-nav");
+    if (!container) return;
 
-        var postit = button.closest(".postit");
-        if (!postit) return;
+    var postits = document.querySelectorAll(".postit");
+    if (postits.length === 0) {
+      container.classList.add("empty");
+      return;
+    }
+    container.classList.remove("empty");
 
-        var postits = Array.from(document.querySelectorAll(".postit"));
-        var index = postits.indexOf(postit);
-        var targetIndex = button.classList.contains("postit-nav-up")
-          ? index - 1
-          : index + 1;
+    var upButton = container.querySelector(".page-nav-up");
+    var downButton = container.querySelector(".page-nav-down");
+    if (upButton) {
+      upButton.disabled = !findNavTarget("up");
+    }
+    if (downButton) {
+      downButton.disabled = !findNavTarget("down");
+    }
+  }
 
-        if (targetIndex >= 0 && targetIndex < postits.length) {
-          // Scroll so the target post-it sits ~10% from the top of the viewport.
-          // scrollIntoView's block:"start" pins it flush to the top edge with
-          // no breathing room above; computing the target manually lets us
-          // leave a small margin so the previous comment is still partly
-          // visible as a contextual cue.
-          var targetTop =
-            postits[targetIndex].getBoundingClientRect().top + window.scrollY;
-          var offset = window.innerHeight * 0.1;
-          window.scrollTo({ top: targetTop - offset, behavior: "smooth" });
-        }
+  // wirePageNav attaches click handlers to the global ▲/▼ buttons and registers
+  // the scroll and resize listeners that keep their disabled state current.
+  function wirePageNav() {
+    var container = document.querySelector(".page-nav");
+    if (!container) return;
+
+    var upButton = container.querySelector(".page-nav-up");
+    var downButton = container.querySelector(".page-nav-down");
+
+    if (downButton) {
+      downButton.addEventListener("click", function () {
+        var target = findNavTarget("down");
+        if (target) scrollPostitToReferenceLine(target);
       });
-    });
+    }
+
+    if (upButton) {
+      upButton.addEventListener("click", function () {
+        var target = findNavTarget("up");
+        if (target) scrollPostitToReferenceLine(target);
+      });
+    }
+
+    // Keep disabled state in sync as the user scrolls or resizes. Passive
+    // avoids blocking the scroll thread; resize uses the same handler since
+    // both the reference line and post-it positions change.
+    window.addEventListener("scroll", updatePageNav, { passive: true });
+    window.addEventListener("resize", updatePageNav);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -346,7 +378,7 @@
     wireHover();
     wireToggleReposition();
     wireCloseButtons();
-    wireNavChevrons();
+    wirePageNav();
     connectSSE();
 
     // Re-arrange when the breakpoint is crossed (e.g. device rotation,
