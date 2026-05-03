@@ -147,7 +147,11 @@ TIPS FOR LLMs
   including a few words before or after the phrase until it is unique.
 
 - The --body flag accepts markdown. Use **bold** for emphasis, backticks for
-  inline code, and bullet lists for multi-point feedback.
+  inline code, and bullet lists for multi-point feedback. Do **not** put
+  literal \n sequences in --body — the shell passes them through verbatim
+  and they render as backslash-n. For multi-line bodies, use a real newline
+  inside the quoted string (e.g. a $'...\n...' shell string, or a heredoc),
+  or keep the body on one line.
 
 - After adding all comments, run 'graphe comment list post.md' to confirm
   every comment was stored correctly before reporting back to the human.

@@ -52,6 +52,10 @@ either is ambiguous or missing, the command exits non-zero with an error.
 
 On success, the new comment ID (e.g. "c-a1b2") is printed to stdout.
 
+Do not put literal \n sequences in --body; the shell passes them through
+verbatim and they render as backslash-n. Use a real newline in the quoted
+string (e.g. a $'...\n...' shell string or a heredoc) for multi-line bodies.
+
 The comment is stored in a sidecar file in the user cache directory,
 keyed by the markdown file's resolved absolute path.`,
 	Example: `  graphe comment add post.md \
